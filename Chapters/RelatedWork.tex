@@ -1,0 +1,154 @@
+\chapter{Background and Related Work}
+\label{cha:background}
+
+This chapter presents the theoretical foundation and related scientific literature for the two stages addressed in this individual thesis contribution: sensor calibration~(ATP-2) and additional data compression~(ATP-3). Section~\ref{sec:background} introduces the key concepts and methods. Section~\ref{sec:related_work} reviews existing scientific research on each topic.
+
+\section{Theoretical Background}
+\label{sec:background}
+
+\subsection{Physics of Pyrometric Calibration and Emissivity}
+
+The fundamental principle of non-contact thermometry involves inferring the surface temperature ($T$) of an object from the spectral radiance ($L_\lambda$) it emits. However, for industrial metals undergoing heat treatment, this inference is complicated by the fact that real-world objects do not behave as ideal blackbodies. According to Planck's Law, the radiation emitted by a surface is governed by the spectral radiance equation:
+
+\begin{equation}
+L_\lambda(T) = \varepsilon(\lambda, T, t) \cdot \frac{2hc^2}{\lambda^5} \cdot \frac{1}{\exp\!\left(\dfrac{hc}{\lambda k_B T}\right) - 1}
+\label{eq:planck_emissivity}
+\end{equation}
+
+In this expression, $\varepsilon$ represents the spectral emissivity—the ratio of the radiation emitted by the metal surface to that of a blackbody at the same temperature~\cite{emissivity_measurement}. From a calibration perspective, $\varepsilon$ is the primary source of systematic measurement error. Unlike laboratory conditions, industrial metal forming involves dynamic changes where $\varepsilon$ is a function of wavelength ($\lambda$), temperature ($T$), and time ($t$). As a steel blank moves through an AP\&T press-hardening line, the formation of oxide layers and changes in surface roughness cause $\varepsilon$ to drift significantly.
+
+When a pyrometer is "raw" or factory-calibrated, it typically assumes a static value for emissivity. However, because $\varepsilon(\lambda, T, t)$ fluctuates during the heating and quenching cycles, the temperature reported by the sensor deviates from the true physical temperature. This deviation, known as emissivity-induced drift, can reach several tens of degrees Celsius~\cite{online_pyrometry_calibration}. The calibration stage~(ATP-2) in this thesis is designed to mathematically "solve" for this unknown, time-varying $\varepsilon$ component by mapping the raw radiance data to a high-fidelity thermocouple reference using non-linear machine learning models.
+
+\subsection{Sensor Calibration}
+\label{subsec:calibration_bg}
+
+Sensor calibration corrects the systematic discrepancy between a raw measurement and a reference. In pyrometry, calibration maps the raw pyrometer output $T_{\text{raw}}$ to a corrected temperature $T_{\text{cal}}$ that should match a thermocouple reference signal~\cite{online_pyrometry_calibration}. This thesis implements and compares the following nine calibration methods.
+
+\subsubsection*{Classical Calibration Methods}
+
+\textbf{Mean Offset Correction.} Computes the arithmetic mean difference $\bar{\delta}$ between pyrometer and thermocouple over a calibration window and applies it as a constant correction:
+\begin{equation}
+T_{\text{cal}}(t) = T_{\text{raw}}(t) - \bar{\delta}, \quad
+\bar{\delta} = \frac{1}{N_c}\sum_{i=1}^{N_c}\bigl(T_{\text{raw}}(t_i) - T_{\text{ref}}(t_i)\bigr)
+\label{eq:mean_offset}
+\end{equation}
+This method assumes the systematic calibration error is constant over time, which holds only approximately since emissivity varies with temperature and oxidation state~\cite{emissivity_measurement}.
+
+\textbf{Linear Regression.} Fits a first-degree polynomial $T_{\text{cal}} = a \cdot T_{\text{raw}} + b$ to the calibration window by ordinary least squares~\cite{online_pyrometry_calibration}. A drift correction step adds a linearly interpolated offset to account for gradual emissivity change. This is the primary classical calibration method in \texttt{calibrate.py}.
+
+\textbf{Polynomial Regression (degree\,=\,2).} Fits a quadratic polynomial to the calibration window using \texttt{numpy.polyfit}. The additional term allows the method to represent a slowly curving calibration relationship that the linear model cannot capture.
+
+\textbf{Piecewise Linear Calibration.} Divides the temperature range of the calibration window into three equal segments and fits a separate linear regression within each segment. The three lines are joined at shared knot points, producing a continuous mapping~\cite{optical_pyrometer_validation}.
+
+\subsubsection*{Machine Learning Calibration Methods}
+
+\textbf{Random Forest Regression.} An ensemble of $N_t = 100$ decision trees trained on bootstrap samples of sliding window features~\cite{random_forest_breiman}. Ensemble averaging across 100 trees reduces prediction variance and provides robustness to overfitting.
+
+\textbf{MLP Neural Network.} A fully connected feedforward network with architecture $[5 \rightarrow 64 \rightarrow 128 \rightarrow 64 \rightarrow 1]$ with ReLU activations. The universal approximation theorem guarantees that this network can represent any continuous calibration function~\cite{mlp_universal_approx}.
+
+\textbf{Gradient Boosting Regression.} Builds 200 trees sequentially, each correcting the residual of the previous ensemble, with learning rate~0.05 and maximum depth~4~\cite{ml_thermal_processing}. The conservative learning rate prevents overfitting on small training sets.
+
+\textbf{Support Vector Regression~(SVR).} Finds the optimal hyperplane fitting the calibration data within a tolerance band of width $2\varepsilon$~\cite{ml_thermal_processing}. Uses an RBF kernel with $C=100$ and $\varepsilon=0.1$, implemented as a scikit-learn Pipeline with MinMaxScaler~\cite{scikit-learn}.
+
+\subsection{Time-Series Data Compression}
+\label{subsec:compression_bg}
+
+Data compression reduces the number of values required to represent a signal while preserving as much information as possible~\cite{lossless_compression}. The compression ratio is:
+\begin{equation}
+CR = \frac{S_{\text{original}}}{S_{\text{compressed}}}
+\label{eq:cr}
+\end{equation}
+where $S$ denotes storage size in bytes. The ATP-3 target is $CR > 4\times$ with acceptable reconstruction RMSE. This thesis investigates three additional compression methods not covered in the parallel thesis~\cite{sravya2026}.
+
+\subsubsection*{Classical Compression Method}
+
+\textbf{Delta Encoding~(int16).} Stores the first value of the signal and then only the differences between consecutive values, rather than the full values~\cite{lossless_compression}:
+\begin{equation}
+d_i = T_i - T_{i-1}, \quad i = 1, 2, \ldots, N-1
+\label{eq:delta}
+\end{equation}
+Because temperature signals change slowly between consecutive time steps, the differences $d_i$ are small and can be quantised to 16-bit integers~(int16) with a scale factor of~100, giving a resolution of~0.01\,\textdegree C. Only the first value~(8~bytes, float64) and the delta array~(2~bytes per sample, int16) need to be stored. Reconstruction is performed by cumulative summation. Implemented in \texttt{classical\_methods.py}.
+
+\subsubsection*{Machine Learning Compression Methods}
+
+\textbf{Variational Autoencoder~(VAE).} Extends the standard autoencoder by learning a probabilistic compressed representation~\cite{autoencoder_compression}. The encoder outputs a mean $\mu$ and log-variance $\log\sigma^2$ rather than a single compressed value. The bottleneck samples from the distribution $\mathcal{N}(\mu, \sigma^2)$ using the reparameterisation trick:
+\begin{equation}
+z = \mu + \sigma \cdot \epsilon, \quad \epsilon \sim \mathcal{N}(0, I)
+\label{eq:vae_reparam}
+\end{equation}
+The VAE loss function combines reconstruction loss and KL divergence:
+\begin{equation}
+\mathcal{L}_{\text{VAE}} = \mathcal{L}_{\text{recon}} + \beta \cdot D_{\text{KL}}\bigl(\mathcal{N}(\mu, \sigma^2) \| \mathcal{N}(0, I)\bigr)
+\label{eq:vae_loss}
+\end{equation}
+where $\beta = 0.001$ weights the KL term. Architecture:
+\begin{itemize}[nosep]
+\item Encoder: Linear($32\!\to\!16$) $\to$ ReLU $\to$ Linear($16\!\to\!8$) $\to$ $\mu$($8\!\to\!3$) and $\log\sigma^2$($8\!\to\!3$)
+\item Decoder: Linear($3\!\to\!8$) $\to$ ReLU $\to$ Linear($8\!\to\!16$) $\to$ ReLU $\to$ Linear($16\!\to\!32$)
+\end{itemize}
+Compression ratio $= 32/3 \approx 10.7\times$. Trained for 50~epochs with Adam~\cite{kingma2014adam}. Implemented in \texttt{ml\_compress.py} using PyTorch~\cite{pytorch}.
+
+\textbf{Deep Autoencoder.} A standard autoencoder with a deeper architecture than the one evaluated in the parallel thesis~\cite{sravya2026}, using four hidden layers in each of the encoder and decoder~\cite{autoencoder_compression}:
+\begin{itemize}[nosep]
+\item Encoder: Linear($32\!\to\!24$) $\to$ ReLU $\to$ Linear($24\!\to\!16$) $\to$ ReLU $\to$ Linear($16\!\to\!8$) $\to$ ReLU $\to$ Linear($8\!\to\!3$)
+\item Decoder: Linear($3\!\to\!8$) $\to$ ReLU $\to$ Linear($8\!\to\!16$) $\to$ ReLU $\to$ Linear($16\!\to\!24$) $\to$ ReLU $\to$ Linear($24\!\to\!32$)
+\end{itemize}
+Compression ratio $= 32/3 \approx 10.7\times$. Trained for 50~epochs with Adam~\cite{kingma2014adam} and MSE loss. Implemented in \texttt{ml\_compress.py} using PyTorch~\cite{pytorch}.
+
+\subsection{Evaluation Metrics}
+\label{subsec:metrics}
+
+\begin{description}[leftmargin=2em, itemsep=2pt]
+\item[RMSE] Root Mean Square Error --- primary accuracy metric for ATP-2 and ATP-3:
+\begin{equation}
+\text{RMSE} = \sqrt{\frac{1}{N}\sum_{i=1}^{N}(T_{\text{processed},i} - T_{\text{reference},i})^2}
+\end{equation}
+
+\item[$R^2$] Coefficient of determination --- secondary quality metric for ATP-2:
+\begin{equation}
+R^2 = 1 - \frac{\sum_i(T_{\text{ref},i} - T_{\text{cal},i})^2}{\sum_i(T_{\text{ref},i} - \bar{T}_{\text{ref}})^2}
+\end{equation}
+Values above~0.99 indicate excellent calibration accuracy for industrial applications~\cite{online_pyrometry_calibration}.
+
+\item[MAE] Mean Absolute Error - Complementary calibration metric less sensitive to large outlier errors.
+
+\item[Improvement~(\%)] Percentage improvement in RMSE over the linear regression baseline:
+\begin{equation}
+\text{Improvement} = \left(1 - \frac{\text{RMSE}_{\text{method}}}{\text{RMSE}_{\text{linear}}}\right) \times 100\,\%
+\end{equation}
+
+\item[CR] Compression Ratio as defined in Equation~\eqref{eq:cr}. The ATP-3 target is $CR > 4\times$.
+\end{description}
+
+\section{Related Work}
+\label{sec:related_work}
+
+\subsection{Pyrometer Calibration and Emissivity Correction}
+
+Ostrowski~et~al.~\cite{optical_pyrometer_validation} validated a two-colour optical fibre pyrometer for measurements in the range 250--600\,\textdegree C, showing that ratio-based pyrometry reduces sensitivity to emissivity changes. Their experimental confirmation of approximately linear calibration curves directly motivates the linear and polynomial calibration methods evaluated in this thesis.
+
+Krapez~\cite{emissivity_measurement} provides a systematic treatment of spectral emissivity measurement of metallic surfaces at high temperatures. The work confirms that emissivity changes are the primary source of systematic error in pyrometric measurements, justifying the need for calibration methods that can account for emissivity-induced drift --- the central motivation for this thesis.
+
+Perez~et~al.~\cite{online_pyrometry_calibration} proposed an online calibration approach using thermocouple reference measurements taken at specific calibration points during production. This approach is directly related to the calibration methodology adopted in this thesis, where the first~20\,\% of the training data serves as the calibration window for all classical methods.
+
+\subsection{Machine Learning for Sensor Calibration}
+
+Breiman~\cite{random_forest_breiman} introduced the Random Forest algorithm used in this thesis. Ensemble averaging of 100 decision trees trained on bootstrap samples provides robustness to overfitting on small training sets, making Random Forest well suited to the calibration problem where training data is limited to one NIST layer.
+
+Zhao~et~al.~\cite{ml_thermal_processing} surveyed machine learning applications to thermal signal processing in manufacturing and found that ensemble methods and neural networks consistently outperform classical regression when the calibration relationship is non-linear or time-varying. This finding is directly confirmed by the experimental results in this thesis, where all four ML methods outperform linear and polynomial regression.
+
+Hornik~et~al.~\cite{mlp_universal_approx} established that multilayer feedforward networks are universal approximators, providing the theoretical basis for the MLP calibrator used in this thesis. Kingma and Ba~\cite{kingma2014adam} introduced the Adam optimiser used to train both the MLP calibrator and the VAE and Deep Autoencoder compression models.
+
+\subsection{Time-Series Compression for Industrial Sensor Data}
+
+Skibinski and Grabowski~\cite{lossless_compression} evaluated compression algorithms for industrial sensor time-series and showed that delta encoding achieves near-lossless compression on slowly varying signals. This motivated the inclusion of Delta Encoding as a classical compression method in this thesis.
+
+Romeu~et~al.~\cite{autoencoder_compression} demonstrated that deep autoencoders can compress sensor time-series to one tenth of their original size while preserving features relevant for anomaly detection. Their architecture directly inspired both the VAE and Deep Autoencoder implementations in this thesis.
+
+Michau and Fink~\cite{learnable_wavelet} proposed a fully learnable deep wavelet transform outperforming fixed-basis wavelet compression on high-frequency industrial monitoring data. Their finding that deep compression methods require larger training datasets to outperform linear methods on smooth signals is directly relevant to the results of this thesis.
+
+\subsection{Open Datasets for High-Temperature Process Monitoring}
+
+The NIST additive manufacturing benchmark dataset~\cite{nist_dataset} provides high-fidelity thermal imaging from a laser powder bed fusion process~(IN625, Ytterbium fibre laser at~1070\,nm, 195\,W, 800\,mm/s). It is used as the primary development and evaluation testbed in this thesis because it provides per-frame calibration coefficients and a consistent thermal signal spanning~2,065 frames per layer, enabling rigorous training and evaluation of all calibration and compression methods.
+
+\let\cleardoublepage\clearpage

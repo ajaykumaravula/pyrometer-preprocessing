@@ -1,0 +1,392 @@
+\chapter{Results and Discussion}
+\label{cha:results}
+
+This chapter presents the experimental results for the signal denoising
+stage~(ATP-1) and the data compression stage~(ATP-3). Section~\ref{sec:nist-denoise}
+reports NIST denoising results. Section~\ref{sec:nist-compress} reports NIST
+compression results. Section~\ref{sec:podfam-results} presents results on the
+PODFAM industrial dataset. Section~\ref{sec:discussion} discusses the findings
+in relation to the two research questions.
+
+\section{Denoising Results on NIST Dataset (ATP-1)}
+\label{sec:nist-denoise}
+
+\subsection{Quantitative Results}
+
+Table~\ref{tab:denoise-results} reports the noise standard deviation and
+percentage noise reduction for all ten denoising methods on NIST Layer~01.
+The raw signal baseline has a noise standard deviation of
+500.2\,\textdegree C, reflecting the significant electronic noise and infrared
+reflections characteristic of the laser powder bed fusion environment.
+
+\begin{table}[H]
+\centering
+\caption{Denoising results on NIST Layer~01~(2,065 frames). Raw baseline noise
+         standard deviation = 500.2\,\textdegree C. Methods sorted by noise
+         reduction within each category.}
+\label{tab:denoise-results}
+\begin{tabular}{llccc}
+\toprule
+\textbf{Method} & \textbf{Type} &
+\textbf{Noise Std Dev (\textdegree C)} & \textbf{Reduction (\%)} & \textbf{Rank} \\
+\midrule
+Raw Baseline     & Baseline  & 500.2 &  0.0 & --- \\
+\midrule
+Kalman Filter    & Classical &  52.5 & 89.5 & 1 \\
+Gaussian Filter  & Classical & 210.1 & 58.0 & 2 \\
+Moving Average   & Classical & 280.5 & 43.9 & 3 \\
+Savitzky--Golay  & Classical & 358.4 & 28.3 & 4 \\
+Median Filter    & Classical & 363.3 & 27.4 & 5 \\
+\midrule
+LSTM Denoiser    & ML        & 341.3 & 31.8 & 1 \\
+CNN Denoiser     & ML        & 350.3 & 30.0 & 2 \\
+BiLSTM Denoiser  & ML        & 355.0 & 29.0 & 3 \\
+Autoencoder Den. & ML        & 363.0 & 27.5 & 4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The Kalman filter achieves the best result by a large margin, reducing noise
+by~89.5\,\% to a standard deviation of just 52.5\,\textdegree C. The Gaussian
+filter is the second-best classical method~(58.0\,\%) and the moving average
+third~(43.9\,\%). Among the ML methods, the LSTM performs best~(31.8\,\%),
+followed by the CNN~(30.0\,\%), the BiLSTM~(29.0\,\%), and the
+Autoencoder~(27.5\,\%).
+
+Figure~\ref{fig:denoise-compare} shows the noise standard deviation bar chart
+for all methods.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/full_comparison_denoise}
+\caption{Noise standard deviation for all ten denoising methods on NIST Layer~01.
+         Classical methods are shown in blue/teal, ML methods in orange/red.
+         The Kalman filter~(52.5\,\textdegree C) achieves noise levels far
+         below all other methods.}
+\label{fig:denoise-compare}
+\end{figure}
+
+\subsection{Discussion}
+
+The Kalman filter's superiority is explained by the nature of the noise. The
+NIST signal is dominated by Gaussian electronic noise on a slowly varying
+temperature trend, which is exactly the signal type the Kalman filter was
+designed for~\cite{kalman_wavelet_denoising}. The ratio $Q/R = 10^{-4}$ means
+the filter trusts its model prediction strongly and suppresses noise very
+effectively.
+
+The Gaussian filter performs well~(58.0\,\%) because the noise is predominantly
+Gaussian in character. It outperforms the moving average despite appearing
+superficially similar because the Gaussian kernel is theoretically optimal for
+removing Gaussian noise with minimum spectral distortion.
+
+The ML denoisers achieve reductions of only~27--32\,\%, substantially lower than
+the Kalman and Gaussian filters. Three factors explain this. First, the training
+target is the median-filtered signal rather than a physical thermocouple
+measurement, which limits the quality of the learning target. Second, the
+training dataset is small~(approximately 1,652 frames from one layer only).
+Third, the Kalman filter benefits from physical knowledge encoded in the
+$Q$ and $R$ parameters, which the ML models must infer purely from
+data~\cite{zhang2023physics}.
+
+\section{Compression Results on NIST Dataset (ATP-3)}
+\label{sec:nist-compress}
+
+\subsection{Quantitative Results}
+
+Table~\ref{tab:compress-results} reports the compression ratio and reconstruction
+RMSE for all six compression methods applied to the calibrated Layer~01 signal.
+
+\begin{table}[H]
+\centering
+\caption{Compression results on NIST Layer~01 calibrated signal. Higher ratio
+         and lower RMSE indicate better performance. ATP-3 target:
+         $CR > 4\times$.}
+\label{tab:compress-results}
+\begin{tabular}{llcc}
+\toprule
+\textbf{Method} & \textbf{Type} &
+\textbf{CR} & \textbf{RMSE (\textdegree C)} \\
+\midrule
+Raw Baseline           & Baseline  & $1.0\times$  &   0.00 \\
+Downsampling 2$\times$ & Classical & $2.0\times$  &  21.97 \\
+SVD rank=10            & Classical & $2.1\times$  & 131.60 \\
+Wavelet~(Haar, 10\,\%) & Classical & $5.0\times$  &  36.55 \\
+PCA~($n=3$)            & ML        & $10.7\times$ &  58.10 \\
+Autoencoder~(bn=3)     & ML        & $10.7\times$ & 170.80 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Wavelet compression achieves the best accuracy--ratio trade-off:
+$5.0\times$ ratio with RMSE~36.55\,\textdegree C, satisfying the ATP-3 target
+of~$CR > 4\times$. PCA achieves the highest ratio~($10.7\times$) at greater
+reconstruction error~(58.10\,\textdegree C). The Autoencoder reaches the same
+ratio as PCA but with a very high RMSE of~170.80\,\textdegree C. Downsampling
+and SVD do not satisfy the ATP-3 ratio target.
+
+Figure~\ref{fig:compress-scatter} shows the ratio versus RMSE trade-off for
+all six methods.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/full_comparison_compress}
+\caption{Compression ratio versus reconstruction RMSE for all six methods on
+         NIST Layer~01. The vertical dashed line marks the ATP-3 target
+         of~$4\times$. Wavelet compression offers the best classical trade-off;
+         PCA offers the best ML trade-off.}
+\label{fig:compress-scatter}
+\end{figure}
+
+\subsection{Discussion}
+
+Wavelet compression performs best because the Haar step-function basis is a
+natural match for the piecewise-smooth shape of a pyrometer cooling
+curve~\cite{learnable_wavelet}. Most of the signal energy is concentrated in a
+small number of large-magnitude coefficients at coarse wavelet scales, and
+retaining only the top~10\,\% captures dominant behaviour with relatively
+low RMSE.
+
+Downsampling achieves the lowest RMSE~(21.97\,\textdegree C) but fails the
+ratio target at only~$2\times$. Truncated SVD achieves poor RMSE
+(131.6\,\textdegree C) at only~$2.1\times$, because sinusoidal SVD basis
+functions require many components to approximate the sharp quench
+transition~\cite{golub2013matrix}.
+
+PCA achieves the highest ratio~($10.7\times$) with RMSE~58.10\,\textdegree C.
+The Autoencoder reaches the same ratio but with much worse reconstruction error
+(170.80\,\textdegree C), likely because the small training dataset of~2,065
+frames is insufficient for the network to learn a compact yet accurate
+representation~\cite{autoencoder_compression}.
+
+\section{Results on PODFAM Dataset}
+\label{sec:podfam-results}
+
+The PODFAM dataset consists of ten point cloud scans from an Aconity MIDI laser
+powder bed fusion machine with a real two-colour pyrometer. The data was provided
+as part of the PODFAM project. Unlike the NIST dataset, PODFAM contains no
+thermocouple reference channel. ML methods therefore cannot be retrained on this
+data, and only classical denoising and compression methods are applied.
+
+\subsection{PODFAM Denoising Results}
+
+Table~\ref{tab:podfam-denoise} shows the classical denoising results across all
+ten PODFAM files. The raw noise level of approximately~5.4\,\textdegree C is
+much lower in absolute terms than on NIST~(500\,\textdegree C), but represents
+a similar relative proportion of the signal amplitude.
+
+\begin{table}[H]
+\centering
+\caption{Classical denoising noise standard deviation~(\textdegree C) across
+         ten PODFAM files. Raw noise $\approx 5.4$\,\textdegree C.
+         ML methods not applied~(no thermocouple reference available).}
+\label{tab:podfam-denoise}
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{File} & \textbf{Raw} & \textbf{MovAvg} & \textbf{Median}
+& \textbf{SavGol} & \textbf{Gaussian} & \textbf{Kalman} \\
+\midrule
+000.280 & 5.42 & 1.73 & 1.93 & 2.25 & 1.29 & 0.63 \\
+002.030 & 5.41 & 1.72 & 1.92 & 2.24 & 1.28 & 0.62 \\
+003.080 & 5.40 & 1.72 & 1.93 & 2.25 & 1.29 & 0.63 \\
+004.060 & 5.41 & 1.73 & 1.93 & 2.25 & 1.29 & 0.63 \\
+005.110 & 5.39 & 1.71 & 1.91 & 2.22 & 1.28 & 0.63 \\
+006.090 & 5.40 & 1.72 & 1.92 & 2.24 & 1.29 & 0.63 \\
+007.000 & 5.39 & 1.72 & 1.92 & 2.23 & 1.29 & 0.63 \\
+008.820 & 5.41 & 1.73 & 1.93 & 2.24 & 1.30 & 0.63 \\
+009.030 & 5.42 & 1.73 & 1.93 & 2.24 & 1.30 & 0.63 \\
+010.010 & 5.40 & 1.72 & 1.92 & 2.24 & 1.29 & 0.63 \\
+\midrule
+\textbf{Mean}      & 5.41 & 1.72 & 1.92 & 2.24 & 1.29 & 0.63 \\
+\textbf{Reduction} & ---  & 68.2\,\% & 64.5\,\% & 58.6\,\%
+                          & 76.2\,\% & 88.4\,\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The results are strikingly consistent across all ten files. The Kalman filter
+achieves~88.4\,\% noise reduction in every file, reducing the raw noise
+from~5.4\,\textdegree C to~0.63\,\textdegree C. The Gaussian filter
+achieves~76.2\,\% and the moving average~68.2\,\%. This consistency without any
+retuning between files confirms that the classical methods are robust enough for
+deployment in an industrial setting where signal conditions vary between
+production runs.
+
+\subsection{PODFAM Melt-Pool Temperature Statistics}
+
+Table~\ref{tab:podfam-temps} reports the melt-pool temperature statistics across
+all ten PODFAM files after two-colour formula conversion. Temperatures range from
+1519 to 1868\,\textdegree C, which is physically plausible for laser powder
+bed fusion of metal.
+
+\begin{table}[H]
+\centering
+\caption{Melt-pool temperature statistics from two-colour pyrometer formula
+         across ten PODFAM files. Temperatures in \textdegree C.}
+\label{tab:podfam-temps}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{File} & \textbf{Points} & \textbf{Median T}
+& \textbf{Max T} & \textbf{Min T} \\
+\midrule
+000.280 & 2,760,696 & 1867.9 & 2016.2 & 1446.9 \\
+002.030 & 2,782,728 & 1594.2 & 1654.0 & 1525.6 \\
+003.080 & 2,723,832 & 1661.4 & 1796.0 & 1366.2 \\
+004.060 & 2,733,552 & 1628.6 & 1699.4 & 1537.0 \\
+005.110 & 2,734,080 & 1519.2 & 1733.4 & 1457.7 \\
+006.090 & 2,723,328 & 1725.5 & 1839.5 & 1674.9 \\
+007.000 & 2,733,072 & 1554.7 & 1647.3 & 1469.8 \\
+008.820 & 2,735,112 & 1652.4 & 1762.5 & 1565.0 \\
+009.030 & 2,735,112 & 1584.8 & 1752.7 & 1501.7 \\
+010.010 & 2,733,576 & 1650.2 & 1715.8 & 1588.9 \\
+\midrule
+\textbf{Mean} & 2,741,527 & 1643.9 & 1764.7 & 1513.4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{PODFAM Compression Results}
+
+Table~\ref{tab:podfam-compress} shows classical compression results across the
+ten PODFAM files.
+
+\begin{table}[H]
+\centering
+\caption{Classical compression results across ten PODFAM files.
+         RMSE values in \textdegree C.}
+\label{tab:podfam-compress}
+\begin{tabular}{lcccccc}
+\toprule
+& \multicolumn{2}{c}{\textbf{Delta Encoding}}
+& \multicolumn{2}{c}{\textbf{Downsampling}}
+& \multicolumn{2}{c}{\textbf{Wavelet 10\,\%}} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+\textbf{File} & \textbf{CR} & \textbf{RMSE}
+              & \textbf{CR} & \textbf{RMSE}
+              & \textbf{CR} & \textbf{RMSE} \\
+\midrule
+000.280 & 2.0 & 0.00 & 2.0 & 0.81 & 3.1 & 1.62 \\
+002.030 & 2.0 & 0.00 & 2.0 & 0.81 & 3.1 & 1.69 \\
+003.080 & 2.0 & 0.00 & 2.0 & 0.80 & 3.1 & 1.77 \\
+004.060 & 2.0 & 0.00 & 2.0 & 0.80 & 3.0 & 1.63 \\
+005.110 & 2.0 & 0.00 & 2.0 & 0.80 & 3.1 & 1.67 \\
+006.090 & 2.0 & 0.00 & 2.0 & 0.80 & 3.0 & 1.59 \\
+007.000 & 2.0 & 0.00 & 2.0 & 0.80 & 3.1 & 1.83 \\
+008.820 & 2.0 & 0.00 & 2.0 & 0.81 & 3.0 & 1.59 \\
+009.030 & 2.0 & 0.00 & 2.0 & 0.80 & 3.1 & 1.71 \\
+010.010 & 2.0 & 0.00 & 2.0 & 0.80 & 3.0 & 1.62 \\
+\midrule
+\textbf{Mean} & 2.0 & 0.00 & 2.0 & 0.80 & 3.1 & 1.67 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Delta encoding achieves near-lossless compression~(RMSE~$\approx 0.0$) at
+$2\times$. Downsampling achieves RMSE~0.80\,\textdegree C at~$2\times$.
+Wavelet compression achieves~$3.1\times$ with RMSE below~2\,\textdegree C
+across all ten files. The wavelet ratio on PODFAM~($3.1\times$) is lower than
+on NIST~($5.0\times$) because the PODFAM signal has higher spatial variability
+across scan points, requiring more coefficients to represent it accurately.
+
+Figure~\ref{fig:podfam-single} shows the pipeline output on a single PODFAM
+file. Figure~\ref{fig:podfam-all} shows the comparison across all ten files.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/podfam_result}
+\caption{PODFAM classical pipeline output on file~000.280. Top panels: raw
+         versus classical denoised signals. Bottom panels: compression results.
+         The Kalman filter~(top right) gives the cleanest output. Results are
+         from the real two-colour pyrometer data from the PODFAM project.}
+\label{fig:podfam-single}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/podfam_all_results}
+\caption{PODFAM classical pipeline results across all ten files. Each column
+         corresponds to one file. The top row shows noise standard deviation
+         before and after each denoising method. The bottom row shows
+         compression ratio and RMSE. Results are highly consistent across
+         all ten files, confirming robustness on real industrial pyrometer data.}
+\label{fig:podfam-all}
+\end{figure}
+
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Classical Methods versus ML Methods}
+
+Table~\ref{tab:classical-vs-ml} summarises the head-to-head comparison between
+the best classical and best ML method for each stage.
+
+\begin{table}[H]
+\centering
+\caption{Best classical versus best ML method for each pipeline stage.}
+\label{tab:classical-vs-ml}
+\begin{tabular}{lllll}
+\toprule
+\textbf{Stage} & \textbf{Best Classical} & \textbf{Value}
+               & \textbf{Best ML} & \textbf{Value} \\
+\midrule
+Denoising (NIST)   & Kalman filter & 89.5\,\% & LSTM & 31.8\,\% \\
+Denoising (PODFAM) & Kalman filter & 88.4\,\% & N/A  & --- \\
+Compression (NIST) & Wavelet 10\,\% & $5.0\times$/36.6\textdegree C
+                   & PCA $n=3$ & $10.7\times$/58.1\textdegree C \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For denoising, the classical Kalman filter clearly outperforms all ML methods on
+both datasets. The gap is large~(89.5\,\% vs~31.8\,\% on NIST) and is primarily
+explained by the quality of the ML training target and the limited training data
+size. For compression, neither classical nor ML provides an unambiguous winner:
+wavelet compression gives lower RMSE at a lower ratio, while PCA gives a higher
+ratio at higher RMSE. The right choice depends on the downstream application's
+priorities.
+
+\subsection{Combined Pipeline Performance}
+
+Table~\ref{tab:pipeline-summary} summarises the recommended method for each
+pipeline stage based on the experimental results.
+
+\begin{table}[H]
+\centering
+\caption{Recommended pipeline configuration and key performance metrics.}
+\label{tab:pipeline-summary}
+\begin{tabular}{llll}
+\toprule
+\textbf{Stage} & \textbf{Recommended Method}
+& \textbf{Metric} & \textbf{Value} \\
+\midrule
+ATP-1~(real-time)   & Kalman filter   & Noise reduction & 89.5\,\% \\
+ATP-1~(offline)     & CNN denoiser    & Noise reduction & 30.0\,\% \\
+ATP-2~(calibration) & Random Forest~\cite{ajay2026}
+                                      & RMSE vs TC & 108.9\,\textdegree C \\
+ATP-3~(accuracy)    & Wavelet 10\,\%  & CR / RMSE
+                    & $5.0\times$ / 36.6\,\textdegree C \\
+ATP-3~(storage)     & PCA $n=3$       & CR / RMSE
+                    & $10.7\times$ / 58.1\,\textdegree C \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Answers to Research Questions}
+
+\textbf{Research Question~1.} The Kalman filter provides the highest noise
+reduction of all ten methods tested: 89.5\,\% on NIST and 88.4\,\% on PODFAM.
+The CNN achieves the best ML result~(30.0\,\%). The median filter is recommended
+for industrial deployment because it removes impulse spikes reliably on both
+datasets without requiring any training data while preserving peak temperatures
+accurately. ATP-1 is satisfied --- all methods achieve a demonstrably lower noise
+standard deviation than the raw signal baseline.
+
+\textbf{Research Question~2.} Wavelet compression with 10\,\% Haar coefficient
+retention achieves a~$5.0\times$ ratio with RMSE~36.55\,\textdegree C,
+satisfying the ATP-3 target of~$CR > 4\times$. PCA achieves the highest
+ratio~($10.7\times$) at greater reconstruction error~(58.10\,\textdegree C).
+Downsampling and SVD do not satisfy the ratio target. ATP-3 is satisfied by
+the wavelet method, and for applications tolerating higher reconstruction error,
+by PCA compression.
+
+\let\cleardoublepage\clearpage

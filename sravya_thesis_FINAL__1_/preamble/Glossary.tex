@@ -1,0 +1,23 @@
+\chapter*{Glossary and Symbols}
+\addcontentsline{toc}{chapter}{Glossary and Symbols}
+
+\begin{description}[leftmargin=3cm, style=nextline]
+\item[AP\&T]       Advanced Pressure Technology Group AB  the Swedish industrial partner for this thesis.
+\item[ATP]         Acceptance Test Procedure a defined quantitative test used to verify that a specific pipeline requirement is met. This thesis addresses ATP-1 (Signal Denoising) and ATP-3 (Data Compression).
+\item[BiLSTM]      Bidirectional Long Short-Term Memory extends LSTM by processing signals in both temporal directions simultaneously.
+\item[CNN]         Convolutional Neural Network a deep learning architecture using convolutional layers to learn local features in sequential data.
+\item[CR]          Compression Ratio  $CR = S_{\text{original}} / S_{\text{compressed}}$. ATP-3 target: $CR > 4\times$.
+\item[LSTM]        Long Short-Term Memory  a recurrent neural network with gating mechanisms for capturing long-range temporal dependencies.
+\item[NIST]        National Institute of Standards and Technology source of the open-source AMBench additive manufacturing dataset used in this thesis.
+\item[PCA]         Principal Component Analysis  a linear dimensionality reduction technique projecting data onto directions of maximum variance.
+\item[PCD]         Point Cloud Data the binary file format used by the Aconity STUDIO system to store per-point pyrometer readings.
+\item[PODFAM]      The industrial dataset used in this thesis, consisting of ten point cloud scan files from an Aconity laser powder bed fusion machine with a real two-colour pyrometer.
+\item[RMSE]        Root Mean Square Error the primary accuracy metric for ATP-3.
+\item[SNR]         Signal-to-Noise Ratio in decibels  the primary quality metric for ATP-1.
+\item[SVD]         Singular Value Decomposition a matrix factorisation used as a classical compression method in this thesis.
+\item[$\varepsilon$] Emissivity ratio of radiation emitted by a real surface to that of an ideal blackbody; the primary source of pyrometer calibration error.
+\item[$\alpha$]    Low-pass filter time constant for the simulated thermocouple reference; $\alpha = 0.08$.
+\item[$Q$]         Kalman filter process noise covariance; $Q = 0.001$.
+\item[$R$]         Kalman filter measurement noise covariance; $R = 10.0$.
+\item[$W$]         Window size for ML methods; $W = 32$ samples.
+\end{description}

@@ -1,0 +1,149 @@
+\chapter{Research Methodology}
+\label{cha:methodology}
+
+This chapter describes the research design, dataset, and implementation approach for the two stages addressed in this individual contribution: sensor calibration~(ATP-2) and additional data compression~(ATP-3). The research questions guiding this work are stated in Section~\ref{sec:research-questions} of Chapter~1.
+
+\section{Research Design and Methodological Approach}
+\label{sec:research_design}
+
+This thesis employs a quantitative, comparative experimental design to evaluate solutions for industrial pyrometer calibration (ATP-2) and data compression (ATP-3). The core objective of the research design is to empirically determine whether non-linear machine learning architectures can track dynamic emissivity drift more accurately than static classical regression models.
+
+To ensure the findings are industrially applicable, the methodology is structured as a pipeline evaluation. Nine distinct calibration models (ranging from simple mean offset to complex ensemble ML models) and three high-fidelity compression methods were implemented. Each algorithm was subjected to an identical evaluation protocol using an 80\%/20\% temporal train-test split. The performance of the calibration models was quantified by measuring the reduction in Root Mean Square Error (RMSE) against a simulated ground-truth reference, while the compression models were evaluated on the trade-off between the compression ratio (CR) and reconstruction fidelity.
+
+\section{Dataset Selection and Scientific Proxy Justification}
+\label{sec:dataset}
+
+A critical methodological challenge in this project was the availability of industrial data. AP\&T provided the PODFAM dataset, which consists of real-world point cloud scans from an Aconity MIDI machine. However, this industrial dataset lacks a physical thermocouple reference channel. Because the machine learning calibration methods evaluated in this thesis (e.g., Random Forest, MLP, Gradient Boosting) rely on supervised learning, they mathematically require a "ground-truth" target to train against. Without a thermocouple, it is scientifically impossible to train or validate these models on the PODFAM data.
+
+To resolve this, the NIST additive manufacturing benchmark dataset~\cite{nist_dataset} was selected as a necessary scientific proxy. The NIST data (Layer 01) provides high-frequency thermal imaging of a laser powder bed fusion process (IN625, 195\,W, 800\,mm/s), which exhibits the extreme thermal gradients and non-linear physical dynamics similar to an AP\&T press-hardening environment.
+
+\subsection{Target Generation and Pre-processing}
+To prepare the NIST proxy for calibration training, the raw three-dimensional radiance array ($126 \times 360 \times N_\text{frames}$) was compressed into a 1D time-series by extracting the maximum pixel value per frame. These raw sensor counts were converted to degrees Celsius utilizing the Sakuma--Hattori equation provided with the dataset:
+
+\begin{equation}
+T\,(\text{\textdegree C}) = 2.655 \cdot x_{\text{raw}} - 800.7 - 273.15
+\label{eq:sakuma}
+\end{equation}
+
+After filtering inactive frames ($T \leq 10$\,\textdegree C), the resulting time-series comprised 2,065 active measurement frames. To provide the necessary ground-truth target for the supervised ML models, a simulated thermocouple reference was synthesized by passing the calibrated signal through a first-order low-pass filter ($\alpha = 0.08$). This reference mimics the inherent thermal lag of a physical thermocouple, providing the exact target variable required to train the ATP-2 models before their eventual deployment on instrumented industrial lines.
+
+\section{Methods: Sensor Calibration (ATP-2)}
+\label{sec:method_calibrate}
+
+Table~\ref{tab:calibration_methods} summarises all nine calibration methods implemented and compared in this thesis.
+
+\begin{table}[H]
+\centering
+\caption{All calibration methods implemented and compared in this thesis~(ATP-2).}
+\label{tab:calibration_methods}
+\begin{tabular}{llll}
+\toprule
+\textbf{Method} & \textbf{Type} & \textbf{Parameters} & \textbf{Script} \\
+\midrule
+Raw Baseline        & Baseline  & ---                              & --- \\
+Mean Offset         & Classical & cal\_fraction\,=\,0.20           & \texttt{classical\_methods.py} \\
+Linear Regression   & Classical & cal\_fraction\,=\,0.20           & \texttt{calibrate.py} \\
+Polynomial (deg=2)  & Classical & degree\,=\,2                     & \texttt{classical\_methods.py} \\
+Piecewise Linear    & Classical & 3 segments                       & \texttt{classical\_methods.py} \\
+Random Forest       & ML        & 100 trees, depth=10, W=5         & \texttt{ml\_calibrate.py} \\
+MLP Neural Net      & ML        & 64--128--64, 100 ep.             & \texttt{ml\_calibrate.py} \\
+Gradient Boosting   & ML        & 200 trees, lr=0.05, depth=4      & \texttt{ml\_calibrate.py} \\
+SVR~(RBF)           & ML        & C=100, $\varepsilon$=0.1         & \texttt{ml\_calibrate.py} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Classical Methods}
+
+The \textbf{mean offset} correction computes the mean difference between the denoised pyrometer signal and the thermocouple reference over the first~20\,\% of training data and subtracts this constant from all subsequent measurements. The \textbf{linear regression} calibrator is fitted on the same calibration window using ordinary least squares and includes a drift correction step~\cite{online_pyrometry_calibration}. The \textbf{polynomial regression}~(degree\,=\,2) and \textbf{piecewise linear}~(3~segments) methods are also fitted on the calibration window using \texttt{numpy.polyfit} and segment-wise least squares respectively. All classical calibration methods are implemented in \texttt{calibrate.py} and \texttt{classical\_methods.py}.
+
+\subsection{Machine Learning Methods}
+
+For all four ML calibration methods, input features are sliding windows of $W=5$ consecutive denoised temperature values. The training set uses the first~80\,\% of the signal; the test set uses the remaining~20\,\%.
+
+\textbf{Random Forest} uses \texttt{RandomForestRegressor(n\_estimators=100, max\_depth=10)} from scikit-learn~\cite{scikit-learn, random_forest_breiman}.
+
+\textbf{MLP} uses a PyTorch~\cite{pytorch} network $[5\!\rightarrow\!64\!\rightarrow\!128\!\rightarrow\!64\!\rightarrow\!1]$ with ReLU activation, trained for~100 epochs with Adam~\cite{kingma2014adam} at learning rate~$10^{-3}$. Inputs and targets are normalised to~$[0,1]$.
+
+\textbf{Gradient Boosting} uses \texttt{GradientBoostingRegressor(n\_estimators=200, learning\_rate=0.05, max\_depth=4)} from scikit-learn~\cite{scikit-learn}.
+
+\textbf{SVR} uses a Pipeline of MinMaxScaler and \texttt{SVR(kernel='rbf', C=100, epsilon=0.1)} from scikit-learn~\cite{scikit-learn}.
+
+\subsection{ATP-2 Evaluation}
+
+Calibration performance is measured by:
+\begin{itemize}[leftmargin=2em, nosep]
+\item \textbf{RMSE~(\textdegree C):} RMSE against the thermocouple reference on the held-out test set.
+\item \textbf{$R^2$:} Coefficient of determination. Target: $R^2 > 0.99$.
+\item \textbf{MAE~(\textdegree C):} Mean absolute error.
+\item \textbf{Improvement~(\%):} Percentage improvement in RMSE over the linear regression baseline.
+\end{itemize}
+
+ATP-2 is considered satisfied if the best-performing method achieves $R^2 > 0.99$ and lower RMSE than the uncalibrated signal.
+
+\section{Methods: Additional Compression (ATP-3)}
+\label{sec:method_compress}
+
+Table~\ref{tab:compress_methods} summarises the three additional compression methods implemented in this thesis.
+
+\begin{table}[H]
+\centering
+\caption{Additional compression methods implemented in this thesis~(ATP-3).}
+\label{tab:compress_methods}
+\begin{tabular}{lllll}
+\toprule
+\textbf{Method} & \textbf{Type} & \textbf{Parameters} & \textbf{Ratio} & \textbf{Script} \\
+\midrule
+Delta Encoding    & Classical & int16, scale=100           & $\approx$2.0$\times$ & \texttt{classical\_methods.py} \\
+VAE               & ML        & bottleneck=3, W=32, 50 ep. & 10.7$\times$         & \texttt{ml\_compress.py} \\
+Deep Autoencoder  & ML        & bottleneck=3, W=32, 50 ep. & 10.7$\times$         & \texttt{ml\_compress.py} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Delta Encoding}
+
+The Delta Encoding method stores the first sample as a float64~(8~bytes) and all subsequent differences as int16~(2~bytes each) with a scale factor of~100. Resolution is~0.01\,\textdegree C per step. The signal is reconstructed by cumulative summation of the stored deltas. This method is near-lossless --- the only error introduced is from quantisation rounding~\cite{lossless_compression}.
+
+\subsection{Machine Learning Compression Methods}
+
+Both ML compressors are implemented in \texttt{ml\_compress.py} using PyTorch~\cite{pytorch}. The calibrated signal is segmented into overlapping windows of length $W=32$ and normalised using MinMaxScaler.
+
+\textbf{VAE} uses the architecture and training procedure described in Section~\ref{subsec:compression_bg}. The KL weight $\beta=0.001$ is chosen to prevent the KL loss from dominating reconstruction loss during early training. Trained for 50~epochs with Adam~\cite{kingma2014adam}.
+
+\textbf{Deep Autoencoder} uses the four-layer encoder~($32\!\rightarrow\!24\!\rightarrow\!16\!\rightarrow\!8\!\rightarrow\!3$) and mirror decoder. Trained for 50~epochs with Adam~\cite{kingma2014adam} and MSE loss.
+
+\subsection{ATP-3 Evaluation}
+
+Compression performance is measured by:
+\begin{itemize}[leftmargin=2em, nosep]
+\item \textbf{Compression ratio~(CR):} defined in Equation~\eqref{eq:cr}. ATP-3 target: $CR > 4\times$.
+\item \textbf{Reconstruction RMSE~(\textdegree C):} RMSE between the reconstructed and original calibrated signal.
+\end{itemize}
+
+ATP-3 is considered satisfied if the best-performing method achieves $CR > 4\times$ while keeping reconstruction RMSE within acceptable tolerance.
+
+\section{Implementation Tools}
+\label{sec:tools}
+
+All methods were implemented in Python~3.10 using the following libraries:
+\begin{itemize}[leftmargin=2em, nosep]
+\item \textbf{NumPy} --- numerical array operations~\cite{scipy}.
+\item \textbf{SciPy} --- data loading and signal utilities~\cite{scipy}.
+\item \textbf{Scikit-learn} --- Random Forest, Gradient Boosting, SVR, MinMaxScaler~\cite{scikit-learn}.
+\item \textbf{PyTorch} --- MLP calibrator, VAE, Deep Autoencoder~\cite{pytorch}.
+\item \textbf{Matplotlib} --- comparison plots and result figures.
+\end{itemize}
+
+\section{Sources of Error and Limitations}
+\label{sec:limitations-ch3}
+
+\textbf{Simulated thermocouple reference.} The NIST dataset contains no physical thermocouple. The simulated reference~($\alpha=0.08$ low-pass filter) approximates thermocouple lag but is not a physical measurement. Reported RMSE values are relative comparisons between methods rather than absolute accuracy estimates.
+
+\textbf{Limited ML training data.} Approximately~1,652 frames from NIST Layer~01 constrain the ML architectures to lightweight designs. Results may improve with multi-layer training data.
+
+\textbf{No thermocouple for PODFAM calibration validation.} The PODFAM dataset contains no thermocouple reference channel, so ATP-2 cannot be quantitatively validated on real industrial data.
+
+\textbf{Dependency on denoising stage.} The calibration stage receives the denoised signal as input. Calibration RMSE therefore reflects both calibration error and any residual noise from the preceding denoising stage~\cite{sravya2026}.
+
+\let\cleardoublepage\clearpage

@@ -1,0 +1,44 @@
+\section*{Glossary and Symbols}
+\vspace{-2ex}\titlerule\vspace{4ex}
+
+\begin{description}[leftmargin=2em, itemsep=4pt]
+\item[AP\&T] Advanced Pressure Technology Group AB --- the Swedish industrial partner for this thesis.
+
+\item[ATP] Acceptance Test Procedure --- a defined quantitative test used to verify that a specific pipeline requirement is met. This thesis addresses ATP-2~(Sensor Calibration) and ATP-3~(additional Compression methods).
+
+\item[CR] Compression Ratio --- $CR = S_{\text{original}} / S_{\text{compressed}}$. ATP-3 target: $CR > 4\times$.
+
+\item[Deep AE] Deep Autoencoder --- a neural network compressor with a four-layer encoder ($32\!\rightarrow\!24\!\rightarrow\!16\!\rightarrow\!8\!\rightarrow\!3$) and mirror decoder. Bottleneck\,=\,3, compression ratio\,=\,10.7$\times$.
+
+\item[GBR] Gradient Boosting Regressor --- an ensemble ML method that builds decision trees sequentially, each correcting errors of the previous. Used as an ML calibration method in this thesis.
+
+\item[MAE] Mean Absolute Error --- average absolute difference between calibrated and reference temperature signals.
+
+\item[MLP] Multi-Layer Perceptron --- a fully connected feedforward neural network. Architecture used: $[5\!\rightarrow\!64\!\rightarrow\!128\!\rightarrow\!64\!\rightarrow\!1]$.
+
+\item[NIST] National Institute of Standards and Technology --- U.S. federal agency whose open-source additive manufacturing dataset is used as the primary testbed.
+
+\item[RMSE] Root Mean Square Error --- primary accuracy metric for ATP-2 and ATP-3.
+
+\item[$R^2$] Coefficient of determination --- secondary metric for ATP-2. ATP-2 target: $R^2 > 0.99$.
+
+\item[RF] Random Forest --- ensemble of~100 decision trees used for calibration regression in this thesis.
+
+\item[SVR] Support Vector Regression --- ML calibration method using RBF kernel with $C=100$, $\varepsilon=0.1$.
+
+\item[VAE] Variational Autoencoder --- probabilistic autoencoder compression method with bottleneck\,=\,3 and compression ratio\,=\,10.7$\times$.
+
+\item[$\varepsilon$] Emissivity --- ratio of radiation emitted by a real surface to that of an ideal blackbody at the same temperature. The primary source of pyrometer calibration error in metal forming processes.
+
+\item[$\alpha$] Low-pass filter time constant used to generate the simulated thermocouple reference; $\alpha = 0.08$.
+
+\item[$\beta$] KL divergence weight in the VAE loss function; $\beta = 0.001$.
+
+\item[$W$] Window size for ML feature construction; $W = 5$ for calibration, $W = 32$ for compression.
+
+\item[$\mu$] Mean vector output by the VAE encoder; dimension~3.
+
+\item[$\sigma^2$] Variance vector output by the VAE encoder; dimension~3.
+\end{description}
+
+\clearpage

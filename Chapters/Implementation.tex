@@ -1,0 +1,63 @@
+\chapter{Software Implementation}
+\label{cha:implementation}
+
+This chapter details the technical implementation of the sensor calibration~(ATP-2) and additional compression~(ATP-3) modules. To ensure a clear distinction of individual research contributions and to address requirements for modularity in industrial software, all code for this thesis is organized within a dedicated repository directory: \url{https://github.com/Sravya0304/pyrometer-preprocessing/tree/main/ajay}.
+
+\section{Module Architecture and Individual Ownership}
+\label{sec:architecture}
+
+The implementation follows a modular, layer-based architecture designed for integration into AP\&T's digital infrastructure. While the overall pipeline includes denoising (addressed in the parallel thesis~\cite{sravya2026}), the \texttt{ajay/} module operates as an independent stage that receives a denoised signal and produces a calibrated, compressed output. 
+
+The software is built using Python 3.10 and relies on \texttt{Scikit-learn} for classical machine learning and \texttt{PyTorch} for deep learning architectures. The code is structured into specific functional scripts to avoid the "fragmentation" of logic and ensure maintainability on the factory floor.
+
+\section{Data Integration and Proxy Justification}
+\label{sec:preprocessing}
+
+A significant implementation challenge was the lack of a physical thermocouple reference in the industrial PODFAM scans provided by AP\&T. Since supervised learning for calibration (ATP-2) requires a "ground-truth" target, the \texttt{layer01\_pipeline.py} script was designed to ingest the NIST additive manufacturing dataset~\cite{nist_dataset} as a high-fidelity scientific proxy. 
+
+This script performs the following critical pre-processing steps before calibration:
+\begin{enumerate}[leftmargin=2em]
+    \item \textbf{Radiance Conversion:} Extracting raw pixel counts and applying the Sakuma--Hattori equation to convert them into degrees Celsius.
+    \item \textbf{Simulated Reference Generation:} Implementing a first-order low-pass filter ($\alpha=0.08$) to generate a "thermocouple-like" signal, providing the target needed to train the ML models.
+    \item \textbf{Feature Engineering:} Transforming the 1D temperature signal into sliding windows of size $W=5$ (for calibration) and $W=32$ (for compression) to provide temporal context to the ML models.
+\end{enumerate}
+
+\section{Calibration Implementation (ATP-2)}
+\label{sec:impl-calibrate}
+
+The calibration logic is split between two primary scripts to separate classical baselines from advanced machine learning models.
+
+\paragraph{Classical Calibration (\texttt{classical\_methods.py}).}
+This script implements the Mean Offset, Polynomial (degree=2), and Piecewise Linear models. The piecewise model is particularly relevant for AP\&T as it attempts to handle the non-linear emissivity changes by dividing the temperature range into three segments, fitting a local linear regression to each.
+
+\paragraph{Machine Learning Calibration (\texttt{ml\_calibrate.py}).}
+This is the core contribution of the calibration stage. It implements:
+\begin{itemize}[leftmargin=2em]
+    \item \textbf{Random Forest:} Configured with 100 estimators and a depth of 10 to balance accuracy with real-time inference speed.
+    \item \textbf{MLP:} A 4-layer fully connected network $[5\!\rightarrow\!64\!\rightarrow\!128\!\rightarrow\!64\!\rightarrow\!1]$ designed to capture the complex, time-varying emissivity drift.
+    \item \textbf{Gradient Boosting:} Utilizing 200 trees with a learning rate of 0.05, providing an interpretable model for industrial operators.
+\end{itemize}
+
+\section{High-Fidelity Compression (ATP-3)}
+\label{sec:impl-compress}
+
+The compression module focuses on the dual requirement of AP\&T: extreme data reduction for long-term archiving and near-lossless reconstruction for quality auditing.
+
+\paragraph{Near-Lossless Compression (\texttt{compress.py}).}
+This script implements Delta Encoding, which stores the first sample as a \texttt{float64} and subsequent differences as scaled \texttt{int16}. This ensures that the reconstruction error remains below 0.10\,\textdegree C, satisfying the most stringent quality requirements.
+
+\paragraph{Probabilistic Compression (\texttt{ml\_compress.py}).}
+For high-ratio storage (10.7$\times$), this script implements a Variational Autoencoder (VAE) and a Deep Autoencoder. The VAE uses a 3-dimensional latent bottleneck and a Kullback--Leibler (KL) divergence term ($\beta=0.001$) to regularize the compressed representation, ensuring a smoother reconstruction of the thermal cooling curves.
+
+\section{Industrial Monitoring and Visualisation}
+\label{sec:visualisation}
+
+The \texttt{visualise.py} script generates the D4 Industrial Dashboard, which serves as a prototype for an AP\&T operator interface. Unlike a generic plot, this dashboard is designed to highlight process-critical events:
+\begin{itemize}[leftmargin=2em]
+    \item \textbf{Event Markers:} Identifying peak temperature points and "Laser-Active" regions.
+    \item \textbf{Error Heatmaps:} Visualizing the calibration error over time to alert operators if emissivity drift exceeds safety thresholds.
+    \item \textbf{Compression Fidelity:} Comparing the raw signal against the Delta and VAE reconstructions to verify information integrity.
+\end{itemize}
+
+The systematic organization of these scripts into the \texttt{ajay/} module provides a robust, validated toolkit for industrial pyrometer pre-processing.
+

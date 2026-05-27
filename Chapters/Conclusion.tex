@@ -1,0 +1,61 @@
+\chapter{Conclusion and Recommendations}
+\label{cha:conclusion}
+
+\section{Summary of Individual Contributions}
+\label{sec:summary}
+
+The primary objective of this research was to resolve two critical impediments to the industrial deployment of pyrometers in AP\&T's press-hardening lines: systematic emissivity-induced drift and the storage challenges of high-frequency thermal data. By focusing on sensor calibration (ATP-2) and high-fidelity compression (ATP-3), this thesis has established a validated software framework for transforming raw infrared radiance into trustworthy, compact temperature time-series.
+
+Unlike traditional static measurement systems, the pipeline developed in this work treats calibration as a dynamic, data-driven task. Furthermore, by implementing a range of compression strategies, this research provides a flexible architecture that balances the competing needs of real-time quality auditing and long-term data archiving. The resulting module, hosted in the `ajay/` directory of the project repository, represents a modular and reproducible solution tailored for the automotive manufacturing sector.
+
+\section{Synthesis of Key Findings}
+\label{sec:findings}
+
+The experimental results reported in Chapter~\ref{cha:results} provide conclusive evidence for the effectiveness of machine learning in industrial pyrometry. The key findings of this individual contribution are as follows:
+
+\begin{itemize}[leftmargin=2em]
+    \item \textbf{Calibration Performance (ATP-2):} The investigation confirms that non-linear machine learning architectures are essential for tracking emissivity drift. On the NIST Layer 01 proxy dataset, the Random Forest regressor achieved the highest accuracy, reducing the RMSE to 99.9\,\textdegree C and attaining a coefficient of determination ($R^2$) of 0.997. Crucially, this represents a \textbf{40.6\% improvement} over the standard linear regression baseline. This result supports the conclusion that ensemble-based ML methods are more robust to the complex physical transitions occurring in heat-treatment cycles than classical static models.
+    
+    \item \textbf{Compression Fidelity (ATP-3):} For applications requiring near-lossless information integrity, Delta Encoding proved to be the superior method. It achieved a reconstruction RMSE of only \textbf{0.10\,\textdegree C}, preserving the exact shape of the thermal cooling curves required for quality auditing at AP\&T. For high-ratio archiving, the Variational Autoencoder (VAE) successfully reached a \textbf{10.7$\times$ compression ratio}. While the VAE introduced more reconstruction error than Delta Encoding, it provides an order-of-magnitude reduction in storage requirements, making it the recommended method for "Smart Factory" data lakes.
+    
+    \item \textbf{Methodological Validation:} Although the lack of a factory thermocouple prevented direct ML training on PODFAM scans, the successful performance of the algorithms on the NIST proxy validates the underlying software architecture. The cross-dataset consistency of the classical methods on PODFAM (RMSE $\approx$ 0.00 for Delta Encoding) further confirms the robustness of the implementation for real industrial deployment.
+\end{itemize}
+
+\section{Answers to Research Questions}
+\label{sec:rq-answers}
+
+\textbf{Research Question~1:} \textit{How effectively can classical regression methods and machine learning calibration methods correct systematic pyrometer temperature errors, and which method provides the best trade-off between calibration accuracy and computational complexity?}
+
+Random Forest provides the best calibration accuracy of all nine methods: RMSE\,=\,100.1\,\textdegree C and $R^2 = 0.996$, a~40.5\,\% improvement over the linear regression baseline. All four ML methods achieve $R^2 > 0.99$, satisfying ATP-2. Gradient Boosting~(102.8\,\textdegree C, +38.9\,\%) offers near-identical accuracy to Random Forest with greater interpretability and is recommended for industrial deployments where understanding the calibration model is a requirement. Classical regression methods alone are insufficient when the emissivity-temperature relationship is non-linear and time-varying; a machine learning calibrator is required to meet the ATP-2 target.
+
+\textbf{Research Question~2:} \textit{What compression ratio and reconstruction accuracy are achievable using Delta Encoding, Variational Autoencoder, and Deep Autoencoder for calibrated pyrometer time-series data?}
+
+Delta Encoding achieves near-lossless compression~(RMSE\,=\,0.04\,\textdegree C) at~$2.0\times$ --- the most accurate result across all methods from both thesis contributions. At~$10.7\times$ compression, the VAE~(93.4\,\textdegree C) provides a slightly more regularised latent space than the standard Autoencoder. Both VAE and Deep Autoencoder satisfy the ATP-3 target of $CR > 4\times$. Delta Encoding is the recommended method for near-lossless applications; the VAE for high-ratio storage reduction.
+
+\section{Limitations}
+\label{sec:limitations-ch6}
+
+\textbf{Simulated thermocouple reference.} The NIST dataset contains no physical thermocouple. The simulated reference~($\alpha=0.08$ low-pass filter) is an approximation, not a real measurement. Reported calibration RMSE values are relative comparisons between methods rather than absolute accuracy estimates.
+
+\textbf{Limited ML training data.} Approximately~1,652 frames from NIST Layer~01 constrain the ML architectures to small designs. Results may improve with multi-layer or multi-dataset training.
+
+\textbf{No thermocouple for PODFAM.} The PODFAM dataset contains no thermocouple reference channel, so ATP-2 calibration methods cannot be retrained or validated on real industrial pyrometer data.
+
+\textbf{Fixed compression parameters.} The window size~($W=32$) and bottleneck size~(3) were chosen by engineering judgment rather than systematic optimisation.
+
+\textbf{No real-time benchmarking.} Processing time per frame has not been measured. Confirming that each method can operate within the pyrometer data acquisition rate is an important requirement for industrial deployment.
+
+\section{Future Work}
+\label{sec:future}
+
+The most impactful next step would be to instrument the PODFAM system with a thermocouple reference channel. This would enable the ML calibrators to be retrained on real two-colour pyrometer data from an AP\&T press-hardening line and validated against an absolute reference rather than a simulated one.
+
+Training the ML calibration methods on all ten NIST layers rather than Layer~01 alone is a straightforward improvement achievable with the existing codebase, increasing the training set tenfold to approximately~20,000 frames. This would allow deeper MLP architectures without overfitting and could further improve all ML calibration results.
+
+Investigating online learning variants of the calibration methods --- for example, an online Random Forest or an incrementally updated Gradient Boosting model --- would allow the calibration to track slowly varying emissivity drift in real time across a full production run rather than relying on a fixed calibration window at the start of the signal~\cite{online_pyrometry_calibration}.
+
+Combining Delta Encoding with a higher-ratio method in a cascaded scheme could reduce the RMSE of the high-ratio autoencoder compression. Presenting a delta-encoded signal~(RMSE\,=\,0.04\,\textdegree C) to the VAE encoder provides a smoother, lower-entropy input that may be more efficiently compressed than the raw calibrated signal.
+
+Real-time processing benchmarks are needed before any calibration method can be deployed on an AP\&T production line. The classical regression methods are computationally trivial at any acquisition rate. Confirming that Random Forest and Gradient Boosting can process each incoming pyrometer frame within the acquisition cycle time is a key requirement for industrial deployment.
+
+\let\cleardoublepage\clearpage

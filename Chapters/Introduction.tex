@@ -1,0 +1,43 @@
+\chapter{Introduction}
+
+In the rigorous landscape of modern automotive manufacturing, the structural integrity of safety-critical components depends on precise thermal control during metal forming and heat treatment. On the press-hardening lines operated by AP\&T, steel blanks are subjected to extreme temperatures, often exceeding 900\,\textdegree C, to achieve specific mechanical properties. While non-contact pyrometry is the standard for temperature monitoring in these environments, the raw data produced by these sensors is inherently flawed. The primary challenge is emissivity drift: as a metal surface heats and oxidises, its infrared radiance changes in a non-linear fashion, causing factory-calibrated pyrometers to drift by tens of degrees. Without an automated system to correct this drift, the "Smart Factory" cannot guarantee the quality of its output.
+
+This thesis presents an individual contribution to a joint project with AP\&T, focusing on the development of an automated pre-processing pipeline to restore the trustworthiness and efficiency of pyrometer data. My research specifically addresses two critical stages: Sensor Calibration (ATP-2) and Additional High-Fidelity Data Compression (ATP-3).
+
+\section{The Industrial Challenge: Emissivity and Data Volume}
+\label{sec:motivation}
+
+The motivation for this work stems from a practical gap in industrial sensing. Conventional pyrometers assume a fixed or slowly varying emissivity ($\varepsilon$), but in a dynamic press-hardening cycle, $\varepsilon$ is affected by temperature, oxidation layers, and material composition. Static calibration models fail to track these complex transitions, leading to systematic errors that propagate through quality control systems. Furthermore, the integration of high-resolution scanning systems has led to a data explosion. AP\&T requires a solution that not only corrects measurement errors but also compresses the resulting high-fidelity signals to a manageable size without losing critical thermal features.
+
+\section{Individual Research Scope}
+\label{sec:individual_contribution}
+
+While signal denoising is addressed in the parallel thesis contribution by Mallepalli Sravya Reddy~\cite{sravya2026}, this work focuses on the subsequent layers of the data pipeline. My individual contributions include:
+
+\begin{itemize}[leftmargin=2em]
+\item \textbf{Sensor Calibration (ATP-2):} The implementation and systematic comparison of nine calibration methods. This includes classical regression baselines and four machine learning architectures---Random Forest, Multi-Layer Perceptron (MLP), Gradient Boosting, and Support Vector Regression (SVR)---designed to learn the non-linear relationship between raw counts and true temperature.
+\item \textbf{Additional Data Compression (ATP-3):} The evaluation of three specific compression strategies. I investigate Delta Encoding for near-lossless reconstruction (RMSE < 0.1\,\textdegree C) and deep learning-based compression using Variational Autoencoders (VAE) and Deep Autoencoders to achieve high reduction ratios for long-term archiving.
+\end{itemize}
+
+\section{Justification for Proxy Data Selection}
+\label{sec:data_justification}
+
+A critical aspect of this research is the use of the NIST additive manufacturing dataset~\cite{nist_dataset}. It is important to clarify that while industrial PODFAM scans were provided by AP\&T, these real-world datasets lack a physical thermocouple reference channel. Since supervised machine learning for calibration requires a ground-truth "target" to train the models, the NIST dataset was selected as an essential scientific proxy. It provides melt-pool temperature signals with a measurable reference, allowing for the rigorous validation of the ML architectures. The methodology established here is designed to be directly transferable to AP\&T production lines once they are instrumented with thermocouple reference trials.
+
+\section{Aim and Research Questions}
+\label{sec:aim}
+
+The aim of this research is to prove that machine learning models can effectively mitigate emissivity-induced drift and that high-fidelity compression can maintain signal integrity at scale. Two research questions are addressed:
+
+\begin{enumerate}[leftmargin=2em]
+\item \textbf{RQ1 (Calibration):} How much accuracy is gained by using non-linear machine learning models (e.g., Random Forest) compared to standard linear regression when correcting emissivity drift, and which method is most suitable for an industrial real-time environment?
+\item \textbf{RQ2 (Compression):} What is the reconstruction-accuracy trade-off when using Delta Encoding versus probabilistic autoencoders, and which method best serves the needs of AP\&T's quality auditing?
+\end{enumerate}
+
+\section{Thesis Structure}
+\label{sec:thesis_structure}
+
+Chapter 2 establishes the theoretical background of infrared physics and ML regression. Chapter 3 details the methodology for training the calibration models on proxy data. Chapter 4 describes the implementation of the `ajay/` software module. Chapter 5 presents a comparative analysis of the results, and Chapter 6 offers final conclusions and industrial recommendations.
+
+
+\let\cleardoublepage\clearpage

@@ -1,0 +1,10 @@
+Stage,Method,Noise,Reduction_%,Spikes_removed,Ratio,RMSE
+Denoise,Moving Average (k=7),1.73,68.1,732092.0,,
+Denoise,Median Filter  (k=7),1.93,64.3,644168.0,,
+Denoise,Savitzky-Golay (w=11),2.25,58.5,728058.0,,
+Denoise,Gaussian (sigma=3.0),1.29,76.2,726880.0,,
+Denoise,"Kalman  (Q=0.001,R=10)",0.63,88.4,1500072.0,,
+,Delta Encoding,,,,2.0,0.0
+,Downsampling 2x,,,,2.0,0.81
+,SVD rank=10,,,,2.1,93.43
+,Wavelet Haar 10%,,,,3.1,1.62

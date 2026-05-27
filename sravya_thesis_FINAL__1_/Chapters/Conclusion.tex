@@ -1,0 +1,136 @@
+\chapter{Conclusion}
+\label{cha:conclusion}
+
+\section{Summary of Work}
+\label{sec:summary}
+
+This thesis set out to design, implement, and evaluate an automated pre-processing
+pipeline for industrial pyrometer temperature data from metal forming and
+heat-treatment processes. The work was motivated by a practical need: raw
+pyrometer signals from press-hardening lines cannot be used directly for process
+monitoring or control because they contain measurement noise, impulse spikes, and
+generate data volumes that are difficult to store and transmit efficiently.
+
+Two pipeline stages were addressed in this individual contribution  signal
+denoising~(ATP-1) and data compression~(ATP-3)  while the sensor calibration
+stage~(ATP-2) is addressed in a parallel thesis by Avula Ajay Kumar. Ten
+denoising methods and six compression methods were implemented in Python and
+evaluated on the open-source NIST additive manufacturing dataset across all ten
+available layers. The five classical denoising and compression methods were
+additionally validated on ten real two-colour pyrometer scans from the PODFAM
+dataset, confirming that the best classical methods generalise well to real
+industrial pyrometer data.
+
+The complete pipeline is delivered as a set of fifteen modular, well-commented
+Python scripts available at
+\url{https://github.com/Sravya0304/pyrometer-preprocessing}.
+
+\section{Key Findings}
+\label{sec:findings}
+
+The most important finding from the denoising evaluation is that the Kalman filter
+clearly outperforms all other methods on both datasets. It achieves 89.5\,\%
+noise reduction on NIST and 88.4\,\% on PODFAM, far ahead of any ML method.
+This result is explained by the nature of the signal: the NIST camera signal is
+dominated by Gaussian electronic noise on a slowly varying temperature trend,
+which is exactly the noise type the Kalman filter was designed to handle.
+
+The ML denoisers~(CNN, LSTM, Autoencoder, BiLSTM) achieve reductions of only
+27--32\,\% on NIST. The main limiting factors are the quality of the training
+target~(median-filtered signal rather than a physical thermocouple measurement)
+and the small training dataset of approximately 1,652 frames from a single NIST
+layer.
+
+For compression, wavelet compression with 10\,\% Haar coefficient retention
+provides the best balance of ratio and accuracy: $5.0\times$ on NIST with RMSE
+36.55\,\textdegree C, satisfying the ATP-3 target. This is the only method that
+meets both the ratio target and maintains a reconstruction error small enough for
+process monitoring applications. PCA achieves the highest ratio~($10.7\times$)
+but at greater reconstruction error.
+
+The cross-dataset consistency of the classical methods is also noteworthy. On
+PODFAM the Kalman filter achieves 88.4\,\% noise reduction in every one of the
+ten files, and wavelet compression achieves approximately~$3.1\times$ ratio with
+RMSE below~2\,\textdegree C in every file, all without any retuning.
+
+\section{Answers to Research Questions}
+\label{sec:rq-answers}
+
+\textbf{Research Question~1:} \textit{How effectively can classical filtering
+methods and machine learning-based denoisers reduce the noise in industrial
+pyrometer signals, and which method provides the best noise reduction while
+preserving genuine temperature peaks?}
+
+The Kalman filter provides the best noise reduction of all ten methods:
+89.5\,\% on NIST and 88.4\,\% on PODFAM. The LSTM achieves the best ML result
+on NIST~(31.8\,\%). The median filter is recommended for industrial deployment
+because it combines reliable spike suppression with peak preservation on both
+datasets without requiring training data. ATP-1 is satisfied --- all methods
+reduce noise relative to the raw baseline, and the best classical method achieves
+a reduction above 89\,\%.
+
+\textbf{Research Question~2:} \textit{What compression ratio is achievable for
+calibrated pyrometer time-series data, and what is the trade-off between
+compression ratio and reconstruction accuracy?}
+
+Wavelet compression with 10\,\% Haar coefficient retention achieves the best
+classical trade-off: $5.0\times$ ratio with RMSE~36.55\,\textdegree C on NIST,
+satisfying the ATP-3 target of~$CR > 4\times$. PCA achieves the highest
+ratio~($10.7\times$) at greater reconstruction error~(58.1\,\textdegree C).
+Downsampling and SVD do not satisfy the ratio target. ATP-3 is satisfied by
+the wavelet method on NIST.
+
+\section{Limitations}
+\label{sec:limitations-ch6}
+
+\textbf{Simulated thermocouple reference.} The NIST dataset contains no physical
+thermocouple. The simulated reference~($\alpha = 0.08$ low-pass filter) is an
+approximation, not a real measurement. Reported denoising RMSE values are
+therefore relative comparisons between methods rather than absolute accuracy
+estimates.
+
+\textbf{Limited ML training data.} Approximately~1,652 frames from NIST Layer~01
+constrain the ML architectures to small designs. Results may improve with
+multi-layer or multi-dataset training.
+
+\textbf{No thermocouple for PODFAM.} The PODFAM dataset contains no thermocouple
+reference channel, so ML methods cannot be retrained or validated on real
+industrial pyrometer data. Only classical methods are applicable without
+additional instrumentation.
+
+\textbf{Fixed compression parameters.} The wavelet coefficient retention fraction
+(10\,\%) and PCA component count~(3) were chosen by engineering judgement rather
+than systematic optimisation.
+
+\textbf{No real-time benchmarking.} Processing time per frame has not been
+measured. Confirming that each method can operate within the pyrometer data
+acquisition rate is an important requirement for industrial deployment.
+
+\section{Future Work}
+\label{sec:future}
+
+The most impactful next step would be to instrument the PODFAM system with a
+thermocouple reference channel. This would enable the ML denoisers to be
+retrained on real two-colour pyrometer data and evaluated against the classical
+methods on a fair basis.
+
+Training the ML denoisers on all ten NIST layers rather than Layer~01 alone is
+a straightforward improvement that could be implemented immediately with the
+existing codebase, increasing the training set size tenfold.
+
+The learnable wavelet transform proposed by Michau and Fink~\cite{learnable_wavelet}
+is a natural extension of the wavelet compression method. A learnable transform
+adapts the basis functions to the specific signal shape during training, which
+could push the compression ratio above~$5\times$ while reducing RMSE below the
+current wavelet result.
+
+Real-time processing benchmarks are needed before any method can be deployed on
+an AP\&T production line. The Kalman filter is naturally suited to real-time
+deployment, but confirming that the CNN and LSTM can match the pyrometer frame
+rate would open the possibility of online ML denoising.
+
+Extending the PODFAM evaluation to files from different material types and process
+parameter settings would provide a more rigorous test of the generalisability of
+the classical methods beyond the ten files evaluated here.
+
+\let\cleardoublepage\clearpage

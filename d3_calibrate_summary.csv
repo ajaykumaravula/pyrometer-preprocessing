@@ -1,0 +1,7 @@
+Method,Category,RMSE_C,Improvement_%
+Linear fit,Classical,172.84,0.0
+Polynomial d=2,Classical,176.01,-1.8
+Piecewise Linear,Classical,175.91,-1.8
+Random Forest,ML,100.08,42.1
+Gradient Boosting,ML,103.97,39.8
+MLP Neural Net,ML,103.83,39.9

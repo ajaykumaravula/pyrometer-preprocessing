@@ -1,0 +1,17 @@
+Step,Method,Type,RMSE_C,Ratio,Noise_C,Reduction_%
+Denoising,Raw Baseline,Baseline,N/A,N/A,500.16,0.0
+Denoising,Moving Average (k=7),Classical,N/A,N/A,280.47,43.9
+Denoising,Median Filter (k=7),Classical,N/A,N/A,363.26,27.4
+Denoising,Savitzky-Golay (w=11),Classical,N/A,N/A,358.37,28.3
+Denoising,Gaussian (sigma=3.0),Classical,N/A,N/A,210.12,58.0
+Denoising,"Kalman (Q=0.001,R=10)",Classical,N/A,N/A,52.54,89.5
+Calibration,Raw Baseline,Baseline,436.8,N/A,N/A,N/A
+Calibration,Mean Offset,Classical,430.38,N/A,N/A,N/A
+Calibration,Linear Regression,Classical,172.84,N/A,N/A,N/A
+Calibration,Polynomial (degree=2),Classical,176.01,N/A,N/A,N/A
+Calibration,Piecewise (3 segments),Classical,175.91,N/A,N/A,N/A
+Compression,Raw Baseline,Baseline,0.00,1.0,N/A,N/A
+Compression,Delta Encoding (int16),Classical,1.2724,4.0,N/A,N/A
+Compression,Downsampling (2x),Classical,21.97,2.0,N/A,N/A
+Compression,SVD (rank=10),Classical,131.6,2.1,N/A,N/A
+Compression,Wavelet Haar (10%),Classical,36.55,5.0,N/A,N/A

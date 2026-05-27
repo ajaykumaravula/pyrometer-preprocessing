@@ -1,0 +1,8 @@
+Method,Category,RMSE_C,Ratio
+Delta Encoding,Classical,1.2927,4.0
+SVD rank=10,Classical,131.6,2.1
+Wavelet 20%,Classical,9.71,2.5
+Wavelet 10%,Classical,36.55,5.0
+PCA n=5,ML,47.62,6.4
+PCA n=3,ML,58.06,10.7
+Autoencoder,ML,170.8,8.0

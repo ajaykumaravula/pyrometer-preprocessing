@@ -1,0 +1,85 @@
+\chapter{Introduction}
+
+Modern manufacturing lines in the automotive sector operate under conditions where metal parts are formed and heat-treated at temperatures regularly exceeding~900\,\textdegree C. Maintaining precise temperature control throughout these processes is essential because even small measurement errors can compromise the structural integrity of the final product or create unsafe operating conditions~\cite{zhang2023physics}. Pyrometers are widely used in these environments because they measure surface temperature from a safe distance without any physical contact with the hot metal, making them well suited to the fast-moving, high-temperature conditions found on press-hardening lines such as those operated by AP\&T~\cite{optical_pyrometer_validation}.
+
+Despite their practical advantages, raw pyrometer signals suffer from two significant problems that prevent their direct use in monitoring and control systems. The first is measurement noise: pyrometer readings fluctuate continuously due to electronic sensor noise and the brief spurious spikes produced whenever infrared reflections from hot furnace walls or nearby equipment enter the sensor field of view~\cite{kalman_wavelet_denoising}. These spikes are indistinguishable from genuine temperature events in the raw signal and degrade the reliability of any downstream analysis. The second problem is data volume: the laser scanning systems used in AP\&T processes generate large volumes of raw pyrometer data that must be stored, transmitted, and queried efficiently~\cite{lossless_compression, autoencoder_compression}.
+
+This thesis addresses both problems through the design, implementation, and systematic evaluation of automated signal denoising and data compression methods for pyrometer time-series data. Six classical signal processing methods and four machine learning approaches are investigated and compared for the denoising stage. Five compression methods are investigated and compared for the compression stage, providing practical guidance for engineers choosing between methods in an industrial deployment.
+
+\section{Individual Contribution}
+\label{sec:individual_contribution}
+
+This thesis represents an individual contribution within a joint project on pyrometer data pre-processing. The individual contribution of this thesis is specifically focused on:
+
+\begin{itemize}[leftmargin=2em]
+\item \textbf{Signal Denoising~(ATP-1):} The investigation, implementation, and evaluation of six classical and four machine learning denoising methods for raw pyrometer signals moving average filter, median filter, Savitzky Golay filter, Gaussian filter, Kalman filter, CNN denoiser, LSTM denoiser, Autoencoder denoiser, and Bidirectional LSTM denoiser compared against a raw signal baseline.
+
+\item \textbf{Data Compression~(ATP-3):} The investigation, implementation, and evaluation of three classical and two machine learning compression methods for calibrated pyrometer time-series  downsampling, SVD, Wavelet compression, PCA compression, and Autoencoder compression  compared against a raw signal baseline.
+\end{itemize}
+
+The sensor calibration stage~(ATP-2) is addressed in a separate individual thesis by Avula Ajay Kumar, which investigates linear regression, polynomial regression, piecewise linear calibration, Random Forest, MLP, Gradient Boosting, and SVR calibration methods. Both contributions share a common base pipeline and dataset, with clearly distinguished individual research questions, methodology, implementation, and evaluation, in accordance with the requirements confirmed by the course examiner.
+
+\section{Motivation}
+\label{sec:motivation}
+
+\paragraph{Noise in pyrometer signals (ATP-1).}
+The impulsive spike artefacts caused by infrared reflections are particularly damaging because they introduce very large, very brief errors into the signal. Classical filtering methods such as moving average and median filters suppress these spikes but each has different trade-offs in terms of peak preservation and computational cost~\cite{kalman_wavelet_denoising}. More advanced classical methods such as the Gaussian filter and Kalman filter offer different noise suppression characteristics suited to different noise types. Machine learning-based denoisers CNN, LSTM, Autoencoder, and Bidirectional LSTM can learn the expected signal shape from data and adapt to changing noise conditions without manual retuning~\cite{zhang2023physics}. A systematic comparison of all these methods is needed to establish which approach is most effective and practical for industrial pyrometer signals.
+
+\paragraph{Data volume (ATP-3).}
+As manufacturing systems become increasingly data-driven, the demand on storage and transmission infrastructure grows rapidly. Compressing the pyrometer time-series without losing the temperature information needed for quality decisions and AI model training is therefore a practical necessity~\cite{autoencoder_compression, lossless_compression}. The right compression strategy must preserve sharp temperature events while achieving a compression ratio high enough to make the data manageable. A systematic evaluation of classical and ML compression methods is needed to identify the best trade-off between compression ratio and reconstruction accuracy for industrial pyrometer data.
+
+\section{Aim}
+\label{sec:aim}
+
+The aim of this thesis is to design, implement, and evaluate automated signal denoising and data compression methods for pyrometer temperature data acquired during industrial metal forming and heat-treatment processes. Two acceptance test procedures are addressed:
+
+\begin{enumerate}[leftmargin=2em]
+\item \textbf{ATP-1 Signal Denoising:} Reduce the noise level of the raw pyrometer signal while preserving genuine temperature events. Success is verified by a quantitative reduction in noise standard deviation and improvement in signal-to-noise ratio~(SNR) relative to the unprocessed signal.
+
+\item \textbf{ATP-3 Data Compression:} Reduce the storage footprint of the processed time-series while preserving temperature accuracy. Success is verified by a compression ratio $CR > 4\times$ with an acceptable reconstruction RMSE.
+\end{enumerate}
+
+\section{Research Questions}
+\label{sec:research-questions}
+
+Two research questions guide the experimental design and evaluation of this individual contribution:
+
+\begin{enumerate}[leftmargin=2em]
+\item How effectively can classical filtering methods~(moving average, median, Savitzky Golay, Gaussian, Kalman) and machine learning-based denoisers~(CNN, LSTM, Autoencoder, BiLSTM) reduce the noise in industrial pyrometer signals, and which method provides the best noise reduction while preserving genuine temperature peaks?~(ATP-1)
+
+\item What compression ratio is achievable for calibrated pyrometer time-series data using classical methods~(Wavelet, SVD, Downsampling) and machine learning methods~(PCA, Autoencoder), and what is the trade-off between compression ratio and reconstruction accuracy at each level?~(ATP-3)
+\end{enumerate}
+
+\section{Contributions}
+\label{sec:contributions}
+
+The individual contributions of this thesis are:
+
+\begin{itemize}[leftmargin=2em]
+\item \textbf{Denoising comparison~(ATP-1):} A systematic implementation and evaluation of ten denoising methods Raw Baseline, Moving Average~(k=7), Median Filter~(k=7), Savitzky--Golay~(w=11, p=3), Gaussian Filter~(sigma=3.0), Kalman Filter~(Q=0.001, R=10), CNN~(four Conv1d layers, 50 epochs), LSTM~(two layers, hidden=64, 50 epochs), Autoencoder Denoiser~(bottleneck=8, 50 epochs), and Bidirectional LSTM~(two layers, hidden=64, 50 epochs) on the NIST Layer~01 dataset, evaluated by noise reduction percentage and SNR~\cite{kalman_wavelet_denoising}.
+
+\item \textbf{Compression comparison~(ATP-3):} A systematic implementation and evaluation of six compression methods Raw Baseline, Downsampling~(2$\times$), Truncated SVD~(rank=10), Wavelet~(Haar, 10\,\% retention), PCA~(3~components, window=32), and Autoencoder~(bottleneck=3, window=32, 100~epochs) evaluated by compression ratio and reconstruction RMSE~\cite{lossless_compression, autoencoder_compression}.
+
+\item \textbf{Baseline establishment:} Implementation of raw signal baselines for both denoising and compression, providing the zero-improvement reference against which all methods are compared.
+
+\item \textbf{Visualisation and analysis:} Contribution to the shared visualisation dashboard~(D4) and trade-off analysis~(D5), specifically the denoising and compression panels.
+\end{itemize}
+
+\section{Scope}
+\label{sec:scope}
+
+This thesis covers ATP-1 and ATP-3 as defined above. ATP-2~(Sensor Calibration) is outside the scope of this contribution and is addressed in the parallel thesis by Avula Ajay Kumar. The following are identified as directions for future work:
+
+\begin{itemize}[leftmargin=2em]
+\item Applying the CNN, LSTM, Autoencoder, and BiLSTM denoisers to PODFAM industrial data after a suitable reference signal for retraining is obtained.
+\item Evaluating learnable wavelet transforms~\cite{learnable_wavelet} to push the PODFAM compression ratio above the~4$\times$ ATP-3 target.
+\item Real-time operation benchmarking to confirm each stage operates within the pyrometer data acquisition rate.
+\item Extending the denoising comparison to additional ML architectures such as transformer-based denoisers.
+\end{itemize}
+
+\section{Thesis Structure}
+\label{sec:thesis_structure}
+
+Chapter~\ref{cha:background} provides the theoretical background on pyrometric measurement, signal denoising, and data compression, and reviews related scientific literature. Chapter~3 describes the research methodology, dataset, and design of each implemented method. Chapter~4 presents the implementation details of each module. Chapter~5 reports the experimental results and discusses their implications for each research question. Chapter~6 concludes the thesis.
+
+\let\cleardoublepage\clearpage

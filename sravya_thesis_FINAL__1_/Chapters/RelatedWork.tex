@@ -1,0 +1,160 @@
+\chapter{Background and Related Work}
+\label{cha:background}
+
+This chapter presents the theoretical foundation and related scientific literature for the two stages addressed in this individual thesis contribution: signal denoising~(ATP-1) and data compression~(ATP-3). Section~\ref{sec:background} introduces the key concepts and methods. Section~\ref{sec:related_work} reviews existing scientific research on each topic.
+
+\section{Background}
+\label{sec:background}
+
+\subsection{Pyrometric Temperature Measurement}
+
+A pyrometer infers the surface temperature of an object from the thermal radiation it emits. According to Planck's law of blackbody radiation, the spectral radiance $L_\lambda$ emitted at wavelength $\lambda$ and temperature $T$ is:
+
+\begin{equation}
+L_\lambda(T) = \frac{2hc^2}{\lambda^5} \cdot \frac{1}{\exp\!\left(\dfrac{hc}{\lambda k_B T}\right) - 1}
+\label{eq:planck}
+\end{equation}
+
+where $h$ is Planck's constant, $c$ is the speed of light, and $k_B$ is the Boltzmann constant~\cite{optical_pyrometer_validation}. Real metal surfaces have emissivity $\varepsilon < 1$ that varies with temperature and oxidation state, introducing systematic measurement error~\cite{emissivity_measurement}. The raw pyrometer signal is also affected by electronic noise and impulsive spike artefacts from infrared reflections, motivating the denoising stage addressed in this thesis.
+
+\subsection{Signal Denoising}
+\label{subsec:denoising_bg}
+
+Signal denoising is the process of separating the true underlying signal from superimposed noise. In industrial pyrometry, noise arises from electronic sensor circuitry~(approximately Gaussian) and optical reflections~(impulsive, heavy-tailed)~\cite{kalman_wavelet_denoising}. This thesis addresses ATP-1 by implementing and comparing the following ten denoising methods five classical and four machine learning approaches, compared against a raw signal baseline.
+
+\subsubsection*{Classical Denoising Methods}
+
+\textbf{Moving Average Filter.} Replaces each sample $x[n]$ with the arithmetic mean of a surrounding window of $N$ samples:
+\begin{equation}
+\hat{x}[n] = \frac{1}{N}\sum_{k=0}^{N-1} x[n-k], \quad N = 7
+\label{eq:ma}
+\end{equation}
+The moving average acts as a low-pass filter that suppresses high-frequency noise and impulsive spikes, but smooths genuine sharp temperature peaks~\cite{kalman_wavelet_denoising}. Implemented in \texttt{classical\_methods.py}.
+
+\textbf{Median Filter.} Replaces each sample with the median value of its $N=7$ neighbouring samples. Because the median is inherently robust to extreme outliers, the median filter removes impulsive spikes effectively without the peak-smoothing effect of the moving average~\cite{kalman_wavelet_denoising}. Used as the primary classical denoising method in \texttt{denoise.py} because it preserves sharp temperature peaks better than the moving average.
+
+\textbf{Savitzky--Golay Filter.} Fits a polynomial of degree $p=3$ to a sliding window of $N=11$ samples using least-squares regression, and reports the polynomial value at the window centre~\cite{savitzky1964smoothing}. This approach preserves peak heights and widths significantly better than either the moving average or the median filter, while still suppressing high-frequency noise.
+
+\textbf{Gaussian Filter.} Applies a Gaussian kernel with standard deviation $\sigma=3.0$ to the signal using \texttt{scipy.ndimage.gaussian\_filter1d}. The Gaussian filter is the most commonly used general-purpose smoothing filter in signal processing because it is mathematically optimal for removing Gaussian noise while minimising distortion of the signal shape. It is implemented in \texttt{classical\_methods.py} and provides a strong classical baseline for comparison with the ML denoisers.
+
+\textbf{Kalman Filter.} A recursive state estimation algorithm that balances trust between a prediction step~(based on a system model) and a measurement update step~\cite{kalman_wavelet_denoising}:
+\begin{equation}
+K_i = \frac{P_{i-1} + Q}{P_{i-1} + Q + R}, \quad
+\hat{x}_i = \hat{x}_{i-1} + K_i(x_i - \hat{x}_{i-1})
+\end{equation}
+where $Q=0.001$ is the process noise covariance, $R=10.0$ is the measurement noise covariance, and $K_i$ is the Kalman gain. The Kalman filter is particularly well suited to real-time industrial sensor denoising because it processes each new measurement as it arrives without storing the full signal history. Implemented in \texttt{classical\_methods.py}.
+
+\subsubsection*{Machine Learning Denoising Methods}
+
+\textbf{CNN Denoiser.} A one-dimensional convolutional neural network that learns to map noisy signal windows to their clean counterparts~\cite{lecun1989backpropagation}. The architecture consists of four Conv1d layers:
+\begin{itemize}[nosep]
+\item Conv1d(1$\to$16, kernel=7, padding=3) + ReLU
+\item Conv1d(16$\to$32, kernel=5, padding=2) + ReLU
+\item Conv1d(32$\to$16, kernel=5, padding=2) + ReLU
+\item Conv1d(16$\to$1, kernel=7, padding=3)
+\end{itemize}
+The network processes overlapping windows of length $W=32$ samples and is trained for 50 epochs using the Adam optimiser~\cite{kingma2014adam} at learning rate~$10^{-3}$, with the median-filtered signal as the clean training target. Implemented in \texttt{ml\_denoise.py}.
+
+\textbf{LSTM Denoiser.} A two-layer Long Short-Term Memory network~\cite{hochreiter1997long} with hidden size~64 that processes the signal as a temporal sequence:
+\begin{itemize}[nosep]
+\item LSTM(input\_size=1, hidden\_size=64, num\_layers=2, batch\_first=True)
+\item Linear(64$\to$1) output projection
+\end{itemize}
+The gating mechanism of LSTM allows it to selectively retain or forget information across time steps, enabling it to learn the expected smooth shape of a pyrometer cooling curve~\cite{ml_thermal_processing}. Trained using the same settings as the CNN. Implemented in \texttt{ml\_denoise.py}.
+
+\textbf{Autoencoder Denoiser.} A neural network with an encoder--decoder architecture that compresses the noisy input into a low-dimensional bottleneck representation and reconstructs the clean signal from it~\cite{autoencoder_compression}:
+\begin{itemize}[nosep]
+\item Encoder: Linear(32$\to$16) $\to$ ReLU $\to$ Linear(16$\to$8) --- bottleneck
+\item Decoder: Linear(8$\to$16) $\to$ ReLU $\to$ Linear(16$\to$32)
+\end{itemize}
+Because the bottleneck layer has fewer dimensions than the input, the network is forced to discard fine-grained noise and retain only the dominant signal structure. Trained for 50 epochs with Adam~\cite{kingma2014adam} and MSE loss. Implemented in \texttt{ml\_denoise.py}.
+
+\textbf{Bidirectional LSTM (BiLSTM) Denoiser.} Extends the standard LSTM by processing the signal in both forward and backward temporal directions simultaneously~\cite{hochreiter1997long}:
+\begin{itemize}[nosep]
+\item BiLSTM(input\_size=1, hidden\_size=64, num\_layers=2, bidirectional=True)
+\item Linear(128$\to$1) output projection 128 because forward + backward states are concatenated
+\end{itemize}
+Each time step prediction uses both past and future context, making BiLSTM better suited to offline denoising than standard LSTM. Trained using the same settings as the LSTM. Implemented in \texttt{ml\_denoise.py}.
+
+\subsection{Time-Series Data Compression}
+\label{subsec:compression_bg}
+
+Data compression reduces the number of values required to represent a signal while preserving as much of the original information as possible~\cite{lossless_compression}. The compression ratio is:
+\begin{equation}
+CR = \frac{S_{\text{original}}}{S_{\text{compressed}}}
+\label{eq:cr}
+\end{equation}
+where $S$ denotes storage size in bytes. The ATP-3 target is $CR > 4\times$ with acceptable reconstruction RMSE. This thesis implements and compares six compression methods three classical and two machine learning approaches, compared against a raw signal baseline.
+
+\subsubsection*{Classical Compression Methods}
+
+\textbf{Downsampling (2$\times$).} Retains every other sample, reducing the signal length by half. The original signal is reconstructed by linear interpolation. Achieves a fixed compression ratio of~2$\times$. Does not satisfy the ATP-3 target but serves as a simple classical baseline.
+
+\textbf{Truncated SVD (rank=10).} Reshapes the signal into overlapping windows of length~$W=32$ and applies Singular Value Decomposition, retaining only the $k=10$ largest singular values~\cite{golub2013matrix}:
+\begin{equation}
+\mathbf{X} \approx \mathbf{U}_k \mathbf{\Sigma}_k \mathbf{V}_k^T
+\end{equation}
+The high reconstruction RMSE of~131.6\,\textdegree C reflects the unsuitability of sinusoidal SVD basis functions for piecewise-smooth pyrometer signals.
+
+\textbf{Wavelet Compression (Haar, 10\,\%).} Decomposes the signal using the Haar discrete wavelet transform and retains only the top~10\,\% of coefficients by absolute magnitude, setting the remainder to zero~\cite{learnable_wavelet}. Only the non-zero coefficients and their indices are stored. The Haar wavelet's step-function basis is well matched to the piecewise-smooth shape of pyrometer cooling curves. Achieves the best classical result: 5.0$\times$ compression ratio with RMSE~36.55\,\textdegree C, satisfying the ATP-3 target. Implemented in \texttt{compress.py}.
+
+\subsubsection*{Machine Learning Compression Methods}
+
+\textbf{PCA Compression (3 components).} Constructs overlapping windows of length $W=32$ samples and applies Principal Component Analysis~\cite{jolliffe2002principal}, projecting each window onto $k=3$ leading principal components. The compression ratio is $32/3 \approx 10.7\times$. Implemented in \texttt{ml\_compress.py} using \texttt{scikit-learn}~\cite{scikit-learn}.
+
+\textbf{Autoencoder Compression (bottleneck=3).} A neural network trained to reconstruct its input via a low-dimensional bottleneck~\cite{autoencoder_compression}:
+\begin{itemize}[nosep]
+\item Encoder: Linear(32$\to$16) $\to$ ReLU $\to$ Linear(16$\to$8) $\to$ ReLU $\to$ Linear(8$\to$3)
+\item Decoder: Linear(3$\to$8) $\to$ ReLU $\to$ Linear(8$\to$16) $\to$ ReLU $\to$ Linear(16$\to$32)
+\end{itemize}
+The compression ratio is $32/3 \approx 10.7\times$. Trained for 100 epochs with Adam~\cite{kingma2014adam} and MSE loss. Implemented in \texttt{ml\_compress.py} using PyTorch~\cite{pytorch}.
+
+\subsection{Evaluation Metrics}
+\label{subsec:metrics}
+
+\begin{description}[leftmargin=2em, itemsep=2pt]
+\item[Noise Reduction (\%)] Percentage decrease in noise standard deviation relative to the raw signal. Computed as the standard deviation of the residual between the signal and a 20-point moving average baseline.
+
+\item[SNR] Signal-to-Noise Ratio in decibels primary quality metric for ATP-1:
+\begin{equation}
+\text{SNR} = 10\log_{10}\!\left(\frac{\sum T_{\text{clean},i}^2}{\sum (T_{\text{clean},i} - T_{\text{processed},i})^2}\right)
+\end{equation}
+
+\item[RMSE] Root Mean Square Error primary accuracy metric for ATP-3:
+\begin{equation}
+\text{RMSE} = \sqrt{\frac{1}{N}\sum_{i=1}^{N}(T_{\text{reconstructed},i} - T_{\text{original},i})^2}
+\end{equation}
+
+\item[CR] Compression Ratio as defined in Equation~\eqref{eq:cr}. The ATP-3 target is $CR > 4\times$.
+\end{description}
+
+\section{Related Work}
+\label{sec:related_work}
+
+\subsection{Signal Denoising for Industrial Sensors}
+
+Alfaouri and Daqrouq~\cite{kalman_wavelet_denoising} compared Kalman filtering and wavelet-based denoising for temperature sensor data, showing that wavelet methods are more effective for impulsive noise while Kalman filtering performs better for Gaussian noise on smooth signals. This finding directly motivated the inclusion of the Kalman filter as a classical denoising method in this thesis, alongside the median filter for impulse rejection.
+
+Zhang~et~al.~\cite{zhang2023physics} proposed the PILOT framework for physics-informed denoising, incorporating physical constraints into the neural network training loss. Their method achieves strong denoising without requiring clean ground-truth labels. This motivated the use of the median-filtered signal as the clean training target for the CNN, LSTM, Autoencoder, and BiLSTM denoisers in this thesis.
+
+Zhao~et~al.~\cite{ml_thermal_processing} surveyed machine learning applications to thermal signal processing in manufacturing and found that deep learning methods consistently outperform classical filters when sufficient training data is available. This trade-off is directly observed in the experimental results of this thesis, where the CNN achieves the best overall noise reduction while classical methods remain competitive.
+
+Hochreiter and Schmidhuber~\cite{hochreiter1997long} introduced the LSTM architecture used in both the LSTM and BiLSTM denoisers. The bidirectional extension processes signals in both temporal directions simultaneously, giving each prediction access to both past and future context  an advantage for offline denoising applications where the complete signal is available~\cite{schmidhuber2015deep}.
+
+Savitzky and Golay~\cite{savitzky1964smoothing} introduced the polynomial smoothing filter used in this thesis. Their approach of fitting a polynomial locally within a sliding window provides better peak preservation than simple averaging, as confirmed by the experimental results.
+
+\subsection{Time-Series Compression for Industrial Sensor Data}
+
+Skibinski and Grabowski~\cite{lossless_compression} evaluated compression algorithms for industrial sensor time-series and reported compression ratios of~3--5$\times$ for smooth signals. This directly motivated the selection of Wavelet compression with~10\,\% coefficient retention as the primary classical compression method, which achieves~5.0$\times$ on the NIST data.
+
+Romeu~et~al.~\cite{autoencoder_compression} demonstrated that deep autoencoders can compress sensor time-series to one tenth of their original size while preserving features relevant for anomaly detection. This result directly motivated the implementation of both the Autoencoder denoiser and the Autoencoder compressor in this thesis.
+
+Michau and Fink~\cite{learnable_wavelet} proposed a fully learnable deep wavelet transform outperforming fixed-basis wavelet compression on high-frequency industrial monitoring data. This work provides strong motivation for including Wavelet compression as a classical baseline and suggests that a learnable wavelet approach could further improve results.
+
+Golub and Van~Loan~\cite{golub2013matrix} provide the mathematical treatment of SVD used in the Truncated SVD compressor. Jolliffe~\cite{jolliffe2002principal} provides the theoretical basis for PCA compression. LeCun~et~al.~\cite{lecun1989backpropagation} provide the foundational work on convolutional neural networks used in the CNN denoiser.
+
+\subsection{Open Datasets for High-Temperature Process Monitoring}
+
+The NIST additive manufacturing benchmark dataset~\cite{nist_dataset} provides high-fidelity thermal imaging from a laser powder bed fusion process~(IN625, Ytterbium fibre laser at~1070\,nm, 195\,W, 800\,mm/s). It is used as the primary development and evaluation testbed in this thesis because it provides per-frame calibration coefficients and a consistent thermal signal spanning~2,065 frames per layer, enabling rigorous training and evaluation of all ten denoising methods and all six compression methods.
+
+\let\cleardoublepage\clearpage
