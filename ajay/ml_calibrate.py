@@ -42,7 +42,7 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 from denoise   import denoise_signal
 from calibrate import linear_calibration, remove_drift
 
-DATA_PATH   = r"C:\Users\sravy\OneDrive\Desktop\Thesis\data (2)\data\Layer05.mat"
+DATA_PATH   = "clean_pyrometer_data.csv"
 WINDOW      = 5
 TRAIN_SPLIT = 0.80
 RF_TREES    = 100
@@ -55,30 +55,25 @@ np.random.seed(SEED)
 
 # STEP 0 - Load and prepare data
 print("=" * 65)
-print("ml_calibrate.py -- ML Calibration with real Layer01.mat data")
+print("ml_calibrate.py -- ML Calibration with local CSV data")
 print("Chain: Raw -> Denoise -> [ML CALIBRATE]")
 print("=" * 65)
-print("\n  Loading Layer01.mat ...")
-mat   = sio.loadmat(DATA_PATH)
-L     = mat["Layer"][0, 0]
-raw3d = L["RadiantTemp"].astype(np.float32)
-sh_A  = float(L["SHvariable_A"].flat[0])
-sh_B  = float(L["SHvariable_B"].flat[0])
-frame_max = raw3d.max(axis=(0, 1))
-T_raw = np.clip(sh_A * frame_max + sh_B - 273.15, 0, 3000)
+print(f"\n  Loading {DATA_PATH} ...")
+
+df = pd.read_csv(DATA_PATH)
+T_raw = df["pyr1_raw_C"].values.astype(np.float32)
+T_tc_orig = df["tc_ref_C"].values.astype(np.float32)
+
 mask  = T_raw > 10
-T_raw = T_raw[mask].astype(np.float32)
+T_raw = T_raw[mask]
+T_tc  = T_tc_orig[mask]
 n     = len(T_raw)
-time_s = np.linspace(0, n * 0.002, n)
-print(f"  Frames loaded : {n}")
+time_s = df["time_s"].values[mask]
+
+print(f"  Samples loaded : {n}")
 print("  Running Stage 1 - Denoising ...")
 T_den = denoise_signal(T_raw, median_kernel=7, gauss_sigma=3.0).astype(np.float32)
 print("  Denoised signal ready")
-T_tc = np.zeros(n)
-T_tc[0] = T_raw[0]
-for i in range(1, n):
-    T_tc[i] = T_tc[i-1] + 0.08 * (T_raw[i] - T_tc[i-1])
-T_tc = (T_tc + np.random.default_rng(42).normal(0, 2, n)).astype(np.float32)
 print("  Thermocouple reference ready")
 
 # Feature engineering

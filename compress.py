@@ -167,6 +167,54 @@ def wavelet_reconstruct(compressed: dict) -> np.ndarray:
     return reconstructed[:compressed["length"]]
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# METHOD 3 — DELTA ENCODING (Near-lossless, int16)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def delta_compress(signal: np.ndarray, scale: float = 100.0):
+    """
+    Near-lossless Delta Encoding using int16 differences.
+    Recommended for high-fidelity thermal cooling curves (ATP-3).
+    
+    Parameters
+    ----------
+    signal : np.ndarray — 1-D temperature time-series
+    scale  : float      — scaling factor to preserve precision in int16
+    
+    Returns
+    -------
+    compressed : dict with keys:
+        'first_val' : first absolute value (float64)
+        'diffs'     : scaled differences (int16)
+        'scale'     : scale used
+        'method'    : 'delta'
+    """
+    signal = signal.astype(np.float64)
+    first_val = signal[0]
+    # Calculate differences between consecutive samples
+    diffs = np.diff(signal)
+    # Scale and quantize to int16
+    diffs_int16 = np.clip(np.round(diffs * scale), -32768, 32767).astype(np.int16)
+    
+    return {
+        "first_val" : first_val,
+        "diffs"     : diffs_int16,
+        "scale"     : scale,
+        "method"    : "delta"
+    }
+
+
+def delta_reconstruct(compressed: dict) -> np.ndarray:
+    """
+    Reconstruct signal from Delta Encoding components.
+    """
+    first_val = compressed["first_val"]
+    scale     = compressed["scale"]
+    diffs     = compressed["diffs"].astype(np.float64) / scale
+    # Reconstruct signal via cumulative sum
+    return np.concatenate(([first_val], first_val + np.cumsum(diffs)))
+
+
 def _haar_forward(x: np.ndarray) -> np.ndarray:
     """Iterative Haar wavelet forward transform (in-place style)."""
     x = x.copy()

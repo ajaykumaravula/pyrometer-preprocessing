@@ -49,7 +49,7 @@ from compress  import wavelet_compress, wavelet_reconstruct, \
 # ─────────────────────────────────────────────────────────────────────────────
 # CONFIGURATION
 # ─────────────────────────────────────────────────────────────────────────────
-DATA_PATH   = r"C:\Users\sravy\OneDrive\Desktop\Thesis\data (2)\data\Layer01.mat"
+DATA_PATH   = "clean_pyrometer_data.csv"
 WINDOW      = 32      # window size for sliding window compression
 BOTTLENECK  = 3       # compressed dimension (3 values per 32 samples)
 AE_EPOCHS   = 100     # autoencoder training epochs
@@ -64,30 +64,23 @@ np.random.seed(SEED)
 # STEP 0 -- Load and run full pipeline chain
 # ─────────────────────────────────────────────────────────────────────────────
 print("=" * 65)
-print("ml_compress.py -- ML Compression with real Layer01.mat data")
+print("ml_compress.py -- ML Compression with local CSV data")
 print("Chain: Raw -> Denoise -> Calibrate -> [ML COMPRESS]")
 print("=" * 65)
 
-print("\n  Loading Layer01.mat ...")
-mat   = sio.loadmat(DATA_PATH)
-L     = mat["Layer"][0, 0]
-raw3d = L["RadiantTemp"].astype(np.float32)
-sh_A  = float(L["SHvariable_A"].flat[0])
-sh_B  = float(L["SHvariable_B"].flat[0])
-frame_max = raw3d.max(axis=(0, 1))
-T_raw = np.clip(sh_A * frame_max + sh_B - 273.15, 0, 3000)
+print(f"\n  Loading {DATA_PATH} ...")
+df = pd.read_csv(DATA_PATH)
+T_raw = df["pyr1_raw_C"].values.astype(np.float32)
+T_tc_orig = df["tc_ref_C"].values.astype(np.float32)
+
 mask  = T_raw > 10
-T_raw = T_raw[mask].astype(np.float32)
+T_raw = T_raw[mask]
+T_tc  = T_tc_orig[mask]
 n     = len(T_raw)
-time_s = np.linspace(0, n * 0.002, n)
+time_s = df["time_s"].values[mask]
 
 print("  Stage 1 - Denoising ...")
 T_den = denoise_signal(T_raw, median_kernel=7, gauss_sigma=3.0).astype(np.float32)
-
-T_tc = np.zeros(n); T_tc[0] = T_raw[0]
-for i in range(1, n):
-    T_tc[i] = T_tc[i-1] + 0.08 * (T_raw[i] - T_tc[i-1])
-T_tc = (T_tc + np.random.default_rng(42).normal(0, 2, n)).astype(np.float32)
 
 print("  Stage 2 - Calibrating ...")
 T_cal, coeffs = linear_calibration(T_den, T_tc, cal_fraction=0.20)
@@ -168,103 +161,126 @@ print(f"  Compression ratio: {ratio_svd:.1f}x")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MODEL 1 -- PCA
+# STEP 2 -- Delta Encoding (ATP-3 recommended near-lossless)
+# ─────────────────────────────────────────────────────────────────────────────
+from compress import delta_compress, delta_reconstruct
+print()
+print("=" * 65)
+print("STAGE 3 -- Delta Encoding (Near-Lossless)")
+print("=" * 65)
+comp_delta = delta_compress(T_cal, scale=100)
+T_delta = delta_reconstruct(comp_delta)
+rmse_delta = float(np.sqrt(mean_squared_error(T_cal, T_delta)))
+ratio_delta = (T_cal.nbytes) / (8 + len(comp_delta["diffs"]) * 2)
+print(f"  Delta Encoding RMSE : {rmse_delta:.4f} C")
+print(f"  Delta Encoding Ratio: {ratio_delta:.2f}x")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STEP 3 -- ML Compression (PCA + Autoencoder + VAE)
 # ─────────────────────────────────────────────────────────────────────────────
 print()
 print("=" * 65)
-print(f"MODEL 1 -- PCA Compression ({BOTTLENECK} components from {WINDOW})")
+print("STAGE 4 -- ML/AI Architectures (Autoencoder, VAE, PCA)")
+print(f"  Target ratio: {WINDOW/BOTTLENECK:.1f}x")
 print("=" * 65)
 
-pca      = PCA(n_components=BOTTLENECK)
-X_pca    = pca.fit_transform(X_n)         # compress: (N,32) -> (N,3)
-X_recon  = pca.inverse_transform(X_pca)   # reconstruct: (N,3) -> (N,32)
-X_recon_orig = scaler.inverse_transform(X_recon)
-T_pca    = windows_to_signal(X_recon_orig, n)
+# PCA
+pca = PCA(n_components=BOTTLENECK)
+X_pca_n = pca.fit_transform(X_n)
+X_pca_orig = scaler.inverse_transform(pca.inverse_transform(X_pca_n))
+T_pca = windows_to_signal(X_pca_orig, n)
 rmse_pca = float(np.sqrt(mean_squared_error(T_cal, T_pca)))
 ratio_pca = WINDOW / BOTTLENECK
-var_exp   = pca.explained_variance_ratio_.sum() * 100
 
-print(f"  Components kept    : {BOTTLENECK} / {WINDOW}")
-print(f"  Variance explained : {var_exp:.1f}%")
-print(f"  RMSE               : {rmse_pca:.2f} C")
-print(f"  Compression ratio  : {ratio_pca:.1f}x")
-print(f"  Improvement vs SVD : {(1-rmse_pca/rmse_svd)*100:.1f}%")
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# MODEL 2 -- AUTOENCODER
-# ─────────────────────────────────────────────────────────────────────────────
-print()
-print("=" * 65)
-print(f"MODEL 2 -- Autoencoder ({WINDOW} -> {BOTTLENECK} -> {WINDOW})")
-print("  Architecture:")
-print(f"  Encoder: {WINDOW}->16->8->{BOTTLENECK}  (compress)")
-print(f"  Decoder: {BOTTLENECK}->8->16->{WINDOW}  (reconstruct)")
-print("=" * 65)
-
-
+# Autoencoder
 class Autoencoder(nn.Module):
-    """
-    Autoencoder for 1-D pyrometer signal compression.
-
-    Encoder compresses each 32-sample window down to 3 values.
-    Decoder reconstructs the 32-sample window from 3 values.
-    Trained to minimise reconstruction error (MSE).
-    """
     def __init__(self, input_dim=32, bottleneck=3):
         super().__init__()
         self.encoder = nn.Sequential(
             nn.Linear(input_dim, 16), nn.ReLU(),
             nn.Linear(16, 8),         nn.ReLU(),
-            nn.Linear(8, bottleneck),             # compressed representation
+            nn.Linear(8, bottleneck),
         )
         self.decoder = nn.Sequential(
             nn.Linear(bottleneck, 8), nn.ReLU(),
             nn.Linear(8, 16),         nn.ReLU(),
-            nn.Linear(16, input_dim),             # reconstructed output
+            nn.Linear(16, input_dim),
         )
+    def forward(self, x): return self.decoder(self.encoder(x))
 
+# VAE
+class VAE(nn.Module):
+    def __init__(self, input_dim=32, bottleneck=3):
+        super().__init__()
+        self.fc1 = nn.Linear(input_dim, 16)
+        self.fc2_mu = nn.Linear(16, bottleneck)
+        self.fc2_logvar = nn.Linear(16, bottleneck)
+        self.fc3 = nn.Linear(bottleneck, 16)
+        self.fc4 = nn.Linear(16, input_dim)
+        self.relu = nn.ReLU()
+    def encode(self, x):
+        h = self.relu(self.fc1(x))
+        return self.fc2_mu(h), self.fc2_logvar(h)
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+    def decode(self, z):
+        h = self.relu(self.fc3(z))
+        return self.fc4(h)
     def forward(self, x):
-        return self.decoder(self.encoder(x))
+        mu, logvar = self.encode(x)
+        z = self.reparameterize(mu, logvar)
+        return self.decode(z), mu, logvar
 
-    def compress(self, x):
-        """Compress: window -> bottleneck representation."""
-        return self.encoder(x)
+def vae_loss_function(recon_x, x, mu, logvar):
+    MSE = nn.functional.mse_loss(recon_x, x, reduction='sum')
+    KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+    return MSE + KLD
 
-    def decompress(self, z):
-        """Decompress: bottleneck -> reconstructed window."""
-        return self.decoder(z)
+Xt = torch.tensor(X_n, dtype=torch.float32)
 
-
-ae   = Autoencoder(input_dim=WINDOW, bottleneck=BOTTLENECK)
-opt  = torch.optim.Adam(ae.parameters(), lr=LR)
-crit = nn.MSELoss()
-Xt   = torch.tensor(X_n, dtype=torch.float32)
+# Train Autoencoder
+ae = Autoencoder(input_dim=WINDOW, bottleneck=BOTTLENECK)
+opt_ae = torch.optim.Adam(ae.parameters(), lr=LR)
 ae_losses = []
-
-print(f"\n  Training Autoencoder for {AE_EPOCHS} epochs ...")
+print(f"\n  Training Autoencoder ({AE_EPOCHS} epochs) ...")
 for ep in range(1, AE_EPOCHS + 1):
-    ae.train(); opt.zero_grad()
-    out  = ae(Xt); loss = crit(out, Xt)
-    loss.backward(); opt.step()
+    ae.train(); opt_ae.zero_grad()
+    out = ae(Xt); loss = nn.MSELoss()(out, Xt)
+    loss.backward(); opt_ae.step()
     ae_losses.append(loss.item())
-    if ep % 20 == 0 or ep == 1:
-        print(f"    Epoch {ep:3d}/{AE_EPOCHS}  Loss: {loss.item():.6f}")
 
-ae.eval()
+# Train VAE
+vae = VAE(input_dim=WINDOW, bottleneck=BOTTLENECK)
+opt_vae = torch.optim.Adam(vae.parameters(), lr=LR)
+vae_losses = []
+print(f"  Training VAE ({AE_EPOCHS} epochs) ...")
+for ep in range(1, AE_EPOCHS + 1):
+    vae.train(); opt_vae.zero_grad()
+    recon_batch, mu, logvar = vae(Xt)
+    loss = vae_loss_function(recon_batch, Xt, mu, logvar)
+    loss.backward(); opt_vae.step()
+    vae_losses.append(loss.item() / len(Xt))
+
+# Eval
+ae.eval(); vae.eval()
 with torch.no_grad():
     X_ae_n = ae(Xt).numpy()
-X_ae_orig = scaler.inverse_transform(X_ae_n)
-T_ae      = windows_to_signal(X_ae_orig, n)
-rmse_ae   = float(np.sqrt(mean_squared_error(T_cal, T_ae)))
-ratio_ae  = WINDOW / BOTTLENECK
+    X_vae_n, _, _ = vae(Xt)
+    X_vae_n = X_vae_n.numpy()
 
-print(f"\n  RMSE              : {rmse_ae:.2f} C")
-print(f"  Compression ratio : {ratio_ae:.1f}x")
-print(f"  Improvement vs SVD: {(1-rmse_ae/rmse_svd)*100:.1f}%")
+T_ae = windows_to_signal(scaler.inverse_transform(X_ae_n), n)
+T_vae = windows_to_signal(scaler.inverse_transform(X_vae_n), n)
+rmse_ae = float(np.sqrt(mean_squared_error(T_cal, T_ae)))
+rmse_vae = float(np.sqrt(mean_squared_error(T_cal, T_vae)))
+
+print(f"\n  Autoencoder RMSE : {rmse_ae:.2f} C")
+print(f"  VAE RMSE         : {rmse_vae:.2f} C")
 
 torch.save(ae.state_dict(), "autoencoder_compressor.pth")
-print("  Model saved -> autoencoder_compressor.pth")
+torch.save(vae.state_dict(), "vae_compressor.pth")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -272,20 +288,16 @@ print("  Model saved -> autoencoder_compressor.pth")
 # ─────────────────────────────────────────────────────────────────────────────
 print()
 print("=" * 65)
-print("COMPARISON TABLE -- All 4 compression methods")
+print("COMPARISON TABLE -- All compression methods (ATP-3)")
 print("=" * 65)
 
 df_compare = pd.DataFrame({
-    "Method"    : ["Wavelet (baseline)", "SVD (baseline)", "PCA", "Autoencoder"],
-    "RMSE_C"    : [round(rmse_wav,2), round(rmse_svd,2), round(rmse_pca,2), round(rmse_ae,2)],
-    "Ratio"     : [round(ratio_wav,1), round(ratio_svd,1), round(ratio_pca,1), round(ratio_ae,1)],
-    "Type"      : ["Traditional", "Traditional", "ML", "ML"],
-    "Note"      : [
-        "Best RMSE at low ratio",
-        "Good for spatial data",
-        "86.8% variance kept",
-        "Learned representation",
-    ]
+    "Method"    : ["Wavelet", "SVD", "Delta", "PCA", "Autoencoder", "VAE"],
+    "RMSE_C"    : [round(rmse_wav,2), round(rmse_svd,2), round(rmse_delta,4), 
+                   round(rmse_pca,2), round(rmse_ae,2), round(rmse_vae,2)],
+    "Ratio"     : [round(ratio_wav,1), round(ratio_svd,1), round(ratio_delta,1), 
+                   round(ratio_pca,1), round(ratio_ae,1), round(ratio_ae,1)],
+    "Type"      : ["Baseline", "Baseline", "Near-Lossless", "ML", "ML", "ML-Prob"]
 })
 print(df_compare.to_string(index=False))
 
@@ -296,21 +308,17 @@ print(df_compare.to_string(index=False))
 print()
 print("=" * 65)
 print("5-ROW PREVIEW -- hottest region")
-print("Columns: Calibrated (input) | Wavelet | PCA | Autoencoder")
 print("=" * 65)
 
 df_prev = pd.DataFrame({
     "Time_s"      : np.round(time_s[idx], 4),
     "Calibrated"  : np.round(T_cal[idx], 2),
-    "Wavelet"     : np.round(T_wav[idx], 2),
+    "Delta"       : np.round(T_delta[idx], 2),
     "PCA"         : np.round(T_pca[idx], 2),
     "Autoencoder" : np.round(T_ae[idx], 2),
+    "VAE"         : np.round(T_vae[idx], 2),
 }, index=[f"t{i}" for i in idx])
 print(df_prev.to_string())
-print()
-print("  Calibrated  = input going INTO compression")
-print("  Wavelet/PCA/Autoencoder = reconstructed output")
-print("  Smaller Error = better compression quality")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -322,18 +330,15 @@ print("Generating visualisation plots ...")
 print("=" * 65)
 
 fig, axes = plt.subplots(2, 2, figsize=(15, 10))
-fig.suptitle("D3 -- ML Compression: Autoencoder + PCA vs Baseline\n"
+fig.suptitle("D3 -- ML Compression: VAE, AE, PCA vs Baseline\n"
              "NIST Layer01 IN625 data", fontsize=13, fontweight="bold")
 
 # Panel A -- full signal
 ax = axes[0, 0]
 ax.plot(time_s, T_cal,  color="black",      lw=1.2, label="Calibrated (original)")
-ax.plot(time_s, T_wav,  color="lightblue",  lw=1.0, alpha=0.9,
-        label=f"Wavelet  RMSE={rmse_wav:.1f}C  ratio={ratio_wav:.1f}x")
-ax.plot(time_s, T_pca,  color="darkorange", lw=1.0,
-        label=f"PCA      RMSE={rmse_pca:.1f}C  ratio={ratio_pca:.1f}x")
-ax.plot(time_s, T_ae,   color="green",      lw=1.0, ls="--",
-        label=f"Autoencoder RMSE={rmse_ae:.1f}C  ratio={ratio_ae:.1f}x")
+ax.plot(time_s, T_delta,color="red",        lw=1.0, label=f"Delta RMSE={rmse_delta:.2f}C")
+ax.plot(time_s, T_pca,  color="darkorange", lw=1.0, label=f"PCA RMSE={rmse_pca:.1f}C")
+ax.plot(time_s, T_vae,  color="green",      lw=1.0, ls="--", label=f"VAE RMSE={rmse_vae:.1f}C")
 ax.set_title("A  Full signal -- original vs reconstructed")
 ax.set_xlabel("Time (s)"); ax.set_ylabel("Temperature (C)"); ax.legend(fontsize=8)
 
@@ -341,46 +346,52 @@ ax.set_xlabel("Time (s)"); ax.set_ylabel("Temperature (C)"); ax.legend(fontsize=
 Z1, Z2 = max(0, HOT-80), min(n, HOT+80)
 ax = axes[0, 1]
 ax.plot(time_s[Z1:Z2], T_cal[Z1:Z2], color="black",      lw=1.5, label="Calibrated")
-ax.plot(time_s[Z1:Z2], T_wav[Z1:Z2], color="lightblue",  lw=1.0, label="Wavelet")
+ax.plot(time_s[Z1:Z2], T_delta[Z1:Z2], color="red",        lw=1.0, label="Delta")
 ax.plot(time_s[Z1:Z2], T_pca[Z1:Z2], color="darkorange", lw=1.2, label="PCA")
-ax.plot(time_s[Z1:Z2], T_ae[Z1:Z2],  color="green",      lw=1.2, label="Autoencoder", ls="--")
+ax.plot(time_s[Z1:Z2], T_vae[Z1:Z2],  color="green",      lw=1.2, label="VAE", ls="--")
 ax.set_title("B  Zoomed at peak temperature")
 ax.set_xlabel("Time (s)"); ax.set_ylabel("Temperature (C)"); ax.legend(fontsize=8)
 
-# Panel C -- autoencoder training loss
+# Panel C -- training losses
 ax = axes[1, 0]
-ax.plot(ae_losses, color="green", lw=1.5, label="Autoencoder loss")
-ax.set_title("C  Autoencoder training loss (lower = better)")
-ax.set_xlabel("Epoch"); ax.set_ylabel("MSE Loss")
+ax.plot(ae_losses, color="blue", lw=1.5, label="AE loss")
+ax.plot(vae_losses, color="green", lw=1.5, label="VAE loss")
+ax.set_title("C  Training losses (lower = better)")
+ax.set_xlabel("Epoch"); ax.set_ylabel("Loss")
 ax.legend(fontsize=8); ax.set_yscale("log")
 
 # Panel D -- RMSE vs ratio bar chart
 ax    = axes[1, 1]
-methods = ["Wavelet\n(baseline)", "SVD\n(baseline)", "PCA\n(ML)", "Autoencoder\n(ML)"]
-rmses   = [rmse_wav, rmse_svd, rmse_pca, rmse_ae]
-ratios  = [ratio_wav, ratio_svd, ratio_pca, ratio_ae]
-colors  = ["steelblue", "cornflowerblue", "darkorange", "green"]
+methods = ["Wavelet", "SVD", "Delta", "PCA", "AE", "VAE"]
+rmses   = [rmse_wav, rmse_svd, rmse_delta, rmse_pca, rmse_ae, rmse_vae]
+ratios  = [ratio_wav, ratio_svd, ratio_delta, ratio_pca, ratio_ae, ratio_ae]
+colors  = ["steelblue", "cornflowerblue", "red", "darkorange", "blue", "green"]
 x = np.arange(len(methods)); w = 0.35
-b1  = ax.bar(x - w/2, rmses,  w, color=colors, alpha=0.85, label="RMSE (C)")
+ax.bar(x - w/2, rmses, w, color=colors, alpha=0.8, label="RMSE (C)")
 ax2 = ax.twinx()
-b2  = ax2.bar(x + w/2, ratios, w, color=colors, alpha=0.4,
-              hatch="//", label="Compression ratio")
-for bar, val in zip(b1, rmses):
-    ax.text(bar.get_x()+bar.get_width()/2, bar.get_height()+0.5,
-            f"{val:.1f}C", ha="center", va="bottom", fontsize=9, fontweight="bold")
-for bar, val in zip(b2, ratios):
-    ax2.text(bar.get_x()+bar.get_width()/2, bar.get_height()+0.1,
-             f"{val:.1f}x", ha="center", va="bottom", fontsize=9, fontweight="bold")
+ax2.bar(x + w/2, ratios, w, color=colors, alpha=0.3, hatch="//", label="Ratio")
 ax.set_title("D  RMSE vs Compression ratio")
-ax.set_ylabel("RMSE (C)"); ax2.set_ylabel("Compression ratio")
-ax.set_xticks(x); ax.set_xticklabels(methods, fontsize=9)
+ax.set_ylabel("RMSE (C)"); ax2.set_ylabel("Ratio")
+ax.set_xticks(x); ax.set_xticklabels(methods)
 ax.legend(loc="upper left", fontsize=8)
-ax2.legend(loc="upper right", fontsize=8)
 
 plt.tight_layout()
-plt.savefig("ml_compress_result.png", dpi=150, bbox_inches="tight")
+plt.savefig("ml_compress_result.png", dpi=150)
 print("  Plot saved -> ml_compress_result.png")
+
+print()
+print("=" * 65)
+print("D3 COMPRESSION COMPLETE")
+print("=" * 65)
+print(f"  Delta (Near-Lossless) : RMSE={rmse_delta:.4f}C  ratio={ratio_delta:.1f}x")
+print(f"  VAE   (ML-Prob)       : RMSE={rmse_vae:.2f}C   ratio={ratio_ae:.1f}x")
+print("=" * 65)
 plt.show()
+
+
+print()
+print("=" * 65)
+...plt.show()
 
 
 print()
