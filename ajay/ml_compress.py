@@ -275,6 +275,8 @@ T_ae = windows_to_signal(scaler.inverse_transform(X_ae_n), n)
 T_vae = windows_to_signal(scaler.inverse_transform(X_vae_n), n)
 rmse_ae = float(np.sqrt(mean_squared_error(T_cal, T_ae)))
 rmse_vae = float(np.sqrt(mean_squared_error(T_cal, T_vae)))
+ratio_ae = WINDOW / BOTTLENECK
+ratio_vae = WINDOW / BOTTLENECK
 
 print(f"\n  Autoencoder RMSE : {rmse_ae:.2f} C")
 print(f"  VAE RMSE         : {rmse_vae:.2f} C")
@@ -296,7 +298,7 @@ df_compare = pd.DataFrame({
     "RMSE_C"    : [round(rmse_wav,2), round(rmse_svd,2), round(rmse_delta,4), 
                    round(rmse_pca,2), round(rmse_ae,2), round(rmse_vae,2)],
     "Ratio"     : [round(ratio_wav,1), round(ratio_svd,1), round(ratio_delta,1), 
-                   round(ratio_pca,1), round(ratio_ae,1), round(ratio_ae,1)],
+                   round(ratio_pca,1), round(ratio_ae,1), round(ratio_vae,1)],
     "Type"      : ["Baseline", "Baseline", "Near-Lossless", "ML", "ML", "ML-Prob"]
 })
 print(df_compare.to_string(index=False))
@@ -378,31 +380,6 @@ ax.legend(loc="upper left", fontsize=8)
 plt.tight_layout()
 plt.savefig("ml_compress_result.png", dpi=150)
 print("  Plot saved -> ml_compress_result.png")
-
-print()
-print("=" * 65)
-print("D3 COMPRESSION COMPLETE")
-print("=" * 65)
-print(f"  Delta (Near-Lossless) : RMSE={rmse_delta:.4f}C  ratio={ratio_delta:.1f}x")
-print(f"  VAE   (ML-Prob)       : RMSE={rmse_vae:.2f}C   ratio={ratio_ae:.1f}x")
-print("=" * 65)
-plt.show()
-
-
-print()
-print("=" * 65)
-print("D3 COMPRESSION COMPLETE")
-print("=" * 65)
-print(f"  Wavelet (baseline) : RMSE={rmse_wav:.2f}C  ratio={ratio_wav:.1f}x")
-print(f"  SVD     (baseline) : RMSE={rmse_svd:.2f}C  ratio={ratio_svd:.1f}x")
-print(f"  PCA     (ML)       : RMSE={rmse_pca:.2f}C  ratio={ratio_pca:.1f}x")
-print(f"  Autoencoder (ML)   : RMSE={rmse_ae:.2f}C   ratio={ratio_ae:.1f}x")
-print()
-print("  PCA achieves 10.7x compression with only 43C RMSE.")
-print("  Autoencoder needs more training epochs to beat PCA.")
-print("  These results feed directly into D5 analysis table.")
-print("=" * 65)
-
 
 # =============================================================================
 # EXTRA MODELS — Added based on supervisor feedback (Amit & Karthikeyan)

@@ -8,34 +8,34 @@ This chapter presents the experimental results for the sensor calibration stage~
 
 \subsection{Quantitative Results}
 
-Table~\ref{tab:calibrate-results} reports the RMSE, coefficient of determination~$R^2$, MAE, and percentage improvement over the linear regression baseline for all nine calibration methods on the NIST Layer~01 test set~(20\,\%, approximately~413 frames). The raw uncalibrated baseline RMSE of~527.1\,\textdegree C against the thermocouple reference confirms that the Sakuma--Hattori signal requires substantial correction.
+Table~\ref{tab:calibrate-results} reports the RMSE, coefficient of determination~$R^2$, MAE, and percentage improvement over the linear regression baseline for all nine calibration methods on the NIST Layer~01 test set~(20\,\%, approximately~549 frames). The raw uncalibrated baseline RMSE of~436.8\,\textdegree C against the thermocouple reference confirms that the Sakuma--Hattori signal requires substantial correction.
 
 \begin{table}[H]
 \centering
-\caption{Calibration results on NIST Layer~01~(2,065 frames). Raw baseline RMSE\,=\,527.1\,\textdegree C. Methods sorted by RMSE within each category. ATP-2 target: $R^2 > 0.99$.}
+\caption{Calibration results on NIST Layer~01~(2,749 frames). Raw baseline RMSE\,=\,436.8\,\textdegree C. Methods sorted by RMSE within each category. ATP-2 target: $R^2 > 0.99$.}
 \label{tab:calibrate-results}
 \begin{tabular}{llcccc}
 \toprule
 \textbf{Method} & \textbf{Type} &
 \textbf{RMSE (\textdegree C)} & \textbf{$R^2$} & \textbf{MAE (\textdegree C)} & \textbf{Improvement} \\
 \midrule
-Raw Baseline       & Baseline  & 527.1 & ---   & ---   & --- \\
+Raw Baseline       & Baseline  & 436.8 & ---   & ---   & --- \\
 \midrule
-Mean Offset        & Classical & 444.8 & 0.961 & 412.3 & $-$164.3\,\%\textsuperscript{\dag} \\
-Linear Regression  & Classical & 168.3 & 0.991 & 138.6 & 0.0\,\% \\
-Polynomial~(d=2)   & Classical & 168.2 & 0.991 & 138.5 & $+$0.1\,\% \\
-Piecewise Linear   & Classical & 284.7 & 0.980 & 251.3 & $-$69.2\,\% \\
+Mean Offset        & Classical & 430.4 & 0.965 & 402.1 & $-$111.7\,\%\textsuperscript{\dag} \\
+Linear Regression  & Classical & 203.4 & 0.992 & 162.7 & 0.0\,\% \\
+Polynomial~(d=2)   & Classical & 205.1 & 0.991 & 164.2 & $-$0.8\,\% \\
+Piecewise Linear   & Classical & 206.5 & 0.990 & 166.8 & $-$1.5\,\% \\
 \midrule
-Random Forest      & ML & 99.9  & 0.997 &  78.1 & $+$40.6\,\% \\
-MLP Neural Net     & ML & 103.6 & 0.995 &  80.9 & $+$38.4\,\% \\
-Gradient Boosting  & ML & 102.9 & 0.996 &  80.5 & $+$38.9\,\% \\
-SVR~(RBF)          & ML & 107.6 & 0.995 &  84.0 & $+$36.1\,\% \\
+Random Forest      & ML & 111.3 & 0.997 &  87.5 & $+$45.3\,\% \\
+MLP Neural Net     & ML & 110.1 & 0.997 &  88.6 & $+$45.9\,\% \\
+Gradient Boosting  & ML & 116.4 & 0.996 &  89.3 & $+$42.8\,\% \\
+SVR~(RBF)          & ML & 111.5 & 0.997 &  88.0 & $+$45.1\,\% \\
 \bottomrule
 \multicolumn{6}{l}{\small\textsuperscript{\dag}Negative improvement means worse than the linear regression baseline.}
 \end{tabular}
 \end{table}
 
-Random Forest achieves the lowest RMSE of~99.9\,\textdegree C, followed by Gradient Boosting~(102.9\,\textdegree C), MLP~(103.6\,\textdegree C), and SVR~(107.6\,\textdegree C). All four ML methods achieve $R^2 \geq 0.995$, satisfying the ATP-2 target of~$R^2 > 0.99$. Among classical methods, only linear regression and polynomial regression~(degree\,=\,2) achieve~$R^2 \geq 0.99$. Mean offset correction and piecewise linear calibration perform worse than the linear baseline because the calibration error is temperature-dependent rather than constant and varies non-linearly across the signal range.
+Random Forest achieves a low RMSE of~111.3\,\textdegree C, and the MLP Neural Net performs even better at~110.1\,\textdegree C. All four ML methods achieve $R^2 \geq 0.996$, comfortably satisfying the ATP-2 target of~$R^2 > 0.99$. Among classical methods, linear regression, polynomial, and piecewise linear models all achieve~$R^2 \geq 0.99$, though their RMSE remains significantly higher than the ML architectures.
 
 Figure~\ref{fig:calibrate-results} shows the RMSE and improvement charts for all nine methods.
 
@@ -48,13 +48,11 @@ Figure~\ref{fig:calibrate-results} shows the RMSE and improvement charts for all
 
 \subsection{Discussion}
 
-The performance gap between classical and ML methods is explained by the nature of the emissivity-temperature relationship. The NIST IN625 signal exhibits a non-linear, time-varying mapping between the denoised pyrometer output and the thermocouple reference, driven by surface emissivity that changes with temperature level and oxidation state during the laser scan~\cite{emissivity_measurement}. Classical methods fit a static mapping to the 20\,\% calibration window and cannot adapt to emissivity drift in the test set.
+The performance gap between classical and ML methods is explained by the nature of the emissivity-temperature relationship. The NIST IN625 signal exhibits a non-linear, time-varying mapping between the denoised pyrometer output and the thermocouple reference, driven by surface emissivity that changes with temperature level and oxidation state during the laser scan~\cite{emissivity_measurement}. Classical methods fit a static mapping to the calibration window and cannot adapt to emissivity drift in the test set.
 
-The piecewise linear calibrator performs substantially worse than the linear baseline~($-$69.2\,\%) on this dataset. The three segment boundaries are determined by temperature percentiles of the calibration window, which cover only a subset of the full signal temperature range. When the test set includes temperatures outside the calibration window range, the extrapolation from the edge segments introduces large errors. The mean offset correction also worsens performance~($-$164.3\,\%) because the mean offset is dominated by the low-temperature portion of the calibration window, introducing a large signed bias when applied to the higher-temperature test set.
+The MLP Neural Net~(110.1\,\textdegree C, +45.9\,\%) and Random Forest~(111.3\,\textdegree C, +45.3\,\%) achieve the best results because they can model the complex non-linear emissivity drift that static classical models cannot track. Ensemble averaging in Random Forest and the deep features learned by the MLP effectively suppress residual noise while tracking the true temperature curve. Gradient Boosting~(116.4\,\textdegree C) and SVR~(111.5\,\textdegree C) also show strong performance, confirming that non-linear ML architectures are essential for industrial calibration accuracy.
 
-Random Forest~(99.9\,\textdegree C, +40.6\,\%) achieves the best result because ensemble averaging of~100 bootstrap-trained trees suppresses the residual noise transients in the denoised signal while learning the non-linear emissivity drift~\cite{random_forest_breiman}. Gradient Boosting~(102.9\,\textdegree C) is very close. The MLP~(103.6\,\textdegree C) converges well within~100 epochs on the available training set. SVR~(107.6\,\textdegree C) is slightly disadvantaged because the residual impulse noise in the denoised signal generates support vectors outside the $\varepsilon$-tube that bias the fitted hyperplane.
-
-ATP-2 is satisfied. All four ML methods achieve $R^2 > 0.99$ and reduce RMSE by more than~36\,\% relative to the linear regression baseline.
+ATP-2 is satisfied. All four ML methods achieve $R^2 > 0.99$ and reduce RMSE by more than~42\,\% relative to the linear regression baseline.
 
 \section{Compression Results on NIST Dataset (ATP-3)}
 \label{sec:nist-compress}
@@ -74,18 +72,18 @@ Table~\ref{tab:compress-results} reports the compression ratio and reconstructio
 \midrule
 Raw Baseline*              & Baseline  & $1.0\times$  &   0.00 \\
 Downsampling~2$\times$*    & Classical & $2.0\times$  &  21.97 \\
-Delta Encoding             & Classical & $2.0\times$  &   0.10 \\
-SVD rank=10*               & Classical & $2.1\times$  & 131.60 \\
-Wavelet~(Haar, 10\,\%)*    & Classical & $5.0\times$  &  36.55 \\
-PCA~($n=3$)*               & ML        & $10.7\times$ &  76.20 \\
-Autoencoder~(bn=3)*        & ML        & $10.7\times$ &  93.70 \\
-VAE~(bn=3)                 & ML        & $10.7\times$ & 147.20 \\
-Deep Autoencoder~(bn=3)    & ML        & $10.7\times$ & 185.40 \\
+Delta Encoding             & Classical & $2.0\times$  &   0.05 \\
+SVD rank=10*               & Classical & $2.1\times$  & 200.17 \\
+Wavelet~(Haar, 10\,\%)*    & Classical & $3.4\times$  &  43.52 \\
+PCA~($n=3$)*               & ML        & $10.7\times$ &  41.71 \\
+Autoencoder~(bn=3)*        & ML        & $10.7\times$ & 123.23 \\
+VAE~(bn=3)                 & ML        & $10.7\times$ & 120.86 \\
+Deep Autoencoder~(bn=3)    & ML        & $10.7\times$ & 141.51 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Delta Encoding achieves a compression ratio of~$2.0\times$ with a reconstruction RMSE of only~0.10\,\textdegree C --- the most accurate compression result among all methods across both thesis contributions. The VAE achieves RMSE\,=\,147.2\,\textdegree C at~$10.7\times$, and the Deep Autoencoder achieves RMSE\,=\,185.4\,\textdegree C at the same ratio. PCA from the parallel thesis achieves the best ML compression accuracy at~76.2\,\textdegree C at~$10.7\times$.
+Delta Encoding achieves a compression ratio of~$2.0\times$ with a reconstruction RMSE of only~0.05\,\textdegree C --- the most accurate compression result among all methods across both thesis contributions. The VAE achieves RMSE\,=\,120.9\,\textdegree C at~$10.7\times$, outperforming both the standard Autoencoder~(123.2\,\textdegree C) and the Deep Autoencoder~(141.5\,\textdegree C) at the same ratio. PCA from the parallel thesis achieves the best ML compression accuracy at~41.7\,\textdegree C at~$10.7\times$.
 
 Figure~\ref{fig:compress-results} shows the compression ratio versus RMSE trade-off for all methods.
 
@@ -98,9 +96,9 @@ Figure~\ref{fig:compress-results} shows the compression ratio versus RMSE trade-
 
 \subsection{Discussion}
 
-Delta Encoding achieves near-lossless compression with RMSE\,=\,0.10\,\textdegree C because the calibrated pyrometer signal changes slowly between consecutive frames. The inter-frame differences are small and fit comfortably within the int16 quantisation range~\cite{lossless_compression}. Delta Encoding does not reach the ATP-3 ratio target of~$4\times$ because the int16 encoding gives only a~$4\times$ reduction in bytes per sample compared to float64, reduced to approximately~$2\times$ after the float64 first-sample overhead. It is the recommended method when storage accuracy is the primary constraint.
+Delta Encoding achieves near-lossless compression with RMSE\,=\,0.05\,\textdegree C because the calibrated pyrometer signal changes slowly between consecutive frames. The inter-frame differences are small and fit comfortably within the int16 quantisation range~\cite{lossless_compression}. Delta Encoding does not reach the ATP-3 ratio target of~$4\times$ because the int16 encoding gives only a~$4\times$ reduction in bytes per sample compared to float64, reduced to approximately~$2\times$ after the float64 first-sample overhead. It is the recommended method when storage accuracy is the primary constraint.
 
-The VAE~(147.2\,\textdegree C) and Deep Autoencoder~(185.4\,\textdegree C) both perform worse than the standard Autoencoder from the parallel thesis~(93.7\,\textdegree C) and worse than PCA~(76.2\,\textdegree C). The small training dataset of approximately~1,652 windows is insufficient for the VAE probabilistic regularisation to reduce reconstruction error below the deterministic baseline at this bottleneck size, and the additional depth of the Deep Autoencoder overfits the training windows rather than improving generalisation. This is consistent with Michau and Fink~\cite{learnable_wavelet}, who found that deep compression methods require substantially larger training sets to outperform linear approaches on smooth, quasi-periodic signals.
+The VAE~(120.9\,\textdegree C) performs better than the standard Autoencoder~(123.2\,\textdegree C) and the Deep Autoencoder~(141.5\,\textdegree C). The probabilistic regularisation of the VAE helps in learning a more robust latent representation of the thermal cooling curves, leading to better reconstruction fidelity than the deterministic models. However, PCA~(41.7\,\textdegree C) remains the most accurate high-ratio method on this dataset, likely due to the smooth, low-dimensional nature of the calibrated signal which linear methods can efficiently capture. All three autoencoder variants satisfy the ATP-3 target of $CR > 4\times$.
 
 \section{Discussion}
 \label{sec:discussion}
@@ -118,14 +116,14 @@ Table~\ref{tab:classical-vs-ml} summarises the best classical and best ML method
 \textbf{Stage} & \textbf{Best Classical} & \textbf{Value}
                & \textbf{Best ML} & \textbf{Value} \\
 \midrule
-Calibration~(NIST) & Linear regression & 168.3\,\textdegree C & Random Forest & 99.9\,\textdegree C \\
-Compression~(NIST) & Delta Encoding & $2.0\times$/0.10\,\textdegree C & PCA* & $10.7\times$/76.2\,\textdegree C \\
+Calibration~(NIST) & Linear regression & 203.4\,\textdegree C & MLP Neural Net & 110.1\,\textdegree C \\
+Compression~(NIST) & Delta Encoding & $2.0\times$/0.05\,\textdegree C & PCA* & $10.7\times$/41.7\,\textdegree C \\
 \bottomrule
 \multicolumn{5}{l}{\small * PCA is from the parallel thesis~\cite{sravya2026}.}
 \end{tabular}
 \end{table}
 
-For calibration, all four ML methods clearly outperform all classical regression methods. The improvement of~40.6\,\% by Random Forest over linear regression reflects the non-linear, time-varying emissivity-temperature relationship that static models cannot track. For compression, Delta Encoding is the unambiguous choice when accuracy is the priority. Among the high-ratio ML methods, PCA from the parallel thesis outperforms the autoencoder variants implemented in this thesis on the available training set size.
+For calibration, all four ML methods clearly outperform all classical regression methods. The improvement of~45.9\,\% by the MLP Neural Net over linear regression reflects the non-linear, time-varying emissivity-temperature relationship that static models cannot track. For compression, Delta Encoding is the unambiguous choice when accuracy is the priority. Among the high-ratio ML methods, PCA from the parallel thesis outperforms the autoencoder variants implemented in this thesis on the available training set size.
 
 \subsection{Combined Pipeline Performance}
 
@@ -142,20 +140,20 @@ Table~\ref{tab:pipeline-summary} summarises the recommended method for each pipe
 \midrule
 ATP-1~(real-time)~\cite{sravya2026}    & Kalman filter      & Noise reduction    & 89.5\,\% \\
 ATP-1~(offline)~\cite{sravya2026}      & CNN denoiser       & Noise reduction    & 30.0\,\% \\
-ATP-2~(accuracy)                       & Random Forest      & RMSE vs TC         & 99.9\,\textdegree C \\
-ATP-2~(interpretable)                  & Gradient Boosting  & RMSE vs TC         & 102.9\,\textdegree C \\
-ATP-3~(accuracy)                       & Delta Encoding     & CR / RMSE          & $2.0\times$ / 0.10\,\textdegree C \\
-ATP-3~(balanced)~\cite{sravya2026}     & Wavelet 10\,\%     & CR / RMSE          & $5.0\times$ / 36.6\,\textdegree C \\
-ATP-3~(high ratio)~\cite{sravya2026}   & PCA $n=3$          & CR / RMSE          & $10.7\times$ / 76.2\,\textdegree C \\
+ATP-2~(accuracy)                       & MLP Neural Net     & RMSE vs TC         & 110.1\,\textdegree C \\
+ATP-2~(robustness)                     & Random Forest      & RMSE vs TC         & 111.3\,\textdegree C \\
+ATP-3~(accuracy)                       & Delta Encoding     & CR / RMSE          & $2.0\times$ / 0.05\,\textdegree C \\
+ATP-3~(balanced)~\cite{sravya2026}     & Wavelet 10\,\%     & CR / RMSE          & $3.4\times$ / 43.5\,\textdegree C \\
+ATP-3~(high ratio)~\cite{sravya2026}   & PCA $n=3$          & CR / RMSE          & $10.7\times$ / 41.7\,\textdegree C \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{Answers to Research Questions}
 
-\textbf{Research Question~1.} Random Forest provides the best calibration accuracy of all nine methods: RMSE\,=\,99.9\,\textdegree C and $R^2=0.997$, representing a~40.6\,\% improvement over the linear regression baseline. All four ML methods achieve $R^2>0.99$, satisfying ATP-2. Classical regression methods are insufficient when the emissivity-temperature relationship is non-linear and time-varying.
+\textbf{Research Question~1.} The MLP Neural Net provides the best calibration accuracy of all nine methods: RMSE\,=\,110.1\,\textdegree C and $R^2=0.997$, representing a~45.9\,\% improvement over the linear regression baseline. Random Forest is a close second at~111.3\,\textdegree C. All four ML methods achieve $R^2>0.99$, satisfying ATP-2. Classical regression methods are insufficient when the emissivity-temperature relationship is non-linear and time-varying.
 
-\textbf{Research Question~2.} Delta Encoding achieves near-lossless compression~(RMSE\,=\,0.10\,\textdegree C) at~$2.0\times$, the most accurate result across all methods from both thesis contributions. At~$10.7\times$, the VAE and Deep Autoencoder both satisfy the ATP-3 ratio target but do not improve on PCA from the parallel thesis at the available training set size. Delta Encoding is the recommended method for near-lossless applications.
+\textbf{Research Question~2.} Delta Encoding achieves near-lossless compression~(RMSE\,=\,0.05\,\textdegree C) at~$2.0\times$, the most accurate result across all methods from both thesis contributions. At~$10.7\times$, the VAE achieves the best results among the autoencoder variants implemented in this thesis, though PCA from the parallel thesis remains the overall most accurate high-ratio method. Delta Encoding is the recommended method for near-lossless applications.
 
 \let\cleardoublepage\clearpage
 

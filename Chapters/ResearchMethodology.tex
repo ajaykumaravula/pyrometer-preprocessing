@@ -46,7 +46,7 @@ Linear Regression   & Classical & cal\_fraction\,=\,0.20           & \texttt{cal
 Polynomial (deg=2)  & Classical & degree\,=\,2                     & \texttt{classical\_methods.py} \\
 Piecewise Linear    & Classical & 3 segments                       & \texttt{classical\_methods.py} \\
 Random Forest       & ML        & 100 trees, depth=10, W=5         & \texttt{ml\_calibrate.py} \\
-MLP Neural Net      & ML        & 64--128--64, 100 ep.             & \texttt{ml\_calibrate.py} \\
+MLP Neural Net      & ML        & 64--128--64, 100 ep., W=5        & \texttt{ml\_calibrate.py} \\
 Gradient Boosting   & ML        & 200 trees, lr=0.05, depth=4      & \texttt{ml\_calibrate.py} \\
 SVR~(RBF)           & ML        & C=100, $\varepsilon$=0.1         & \texttt{ml\_calibrate.py} \\
 \bottomrule
@@ -59,11 +59,11 @@ The \textbf{mean offset} correction computes the mean difference between the den
 
 \subsection{Machine Learning Methods}
 
-For all four ML calibration methods, input features are sliding windows of $W=5$ consecutive denoised temperature values. The training set uses the first~80\,\% of the signal; the test set uses the remaining~20\,\%.
+For all four ML calibration methods, input features are sliding windows of $W=5$ consecutive denoised temperature values. Including the current frame, this provides 6 input features per sample. The training set uses the first~80\,\% of the signal; the test set uses the remaining~20\,\%.
 
 \textbf{Random Forest} uses \texttt{RandomForestRegressor(n\_estimators=100, max\_depth=10)} from scikit-learn~\cite{scikit-learn, random_forest_breiman}.
 
-\textbf{MLP} uses a PyTorch~\cite{pytorch} network $[5\!\rightarrow\!64\!\rightarrow\!128\!\rightarrow\!64\!\rightarrow\!1]$ with ReLU activation, trained for~100 epochs with Adam~\cite{kingma2014adam} at learning rate~$10^{-3}$. Inputs and targets are normalised to~$[0,1]$.
+\textbf{MLP} uses a PyTorch~\cite{pytorch} network $[6\!\rightarrow\!64\!\rightarrow\!128\!\rightarrow\!64\!\rightarrow\!1]$ with ReLU activation, trained for~100 epochs with Adam~\cite{kingma2014adam} at learning rate~$10^{-3}$. Inputs and targets are normalised to~$[0,1]$.
 
 \textbf{Gradient Boosting} uses \texttt{GradientBoostingRegressor(n\_estimators=200, learning\_rate=0.05, max\_depth=4)} from scikit-learn~\cite{scikit-learn}.
 
@@ -94,9 +94,9 @@ Table~\ref{tab:compress_methods} summarises the three additional compression met
 \toprule
 \textbf{Method} & \textbf{Type} & \textbf{Parameters} & \textbf{Ratio} & \textbf{Script} \\
 \midrule
-Delta Encoding    & Classical & int16, scale=100           & $\approx$2.0$\times$ & \texttt{classical\_methods.py} \\
-VAE               & ML        & bottleneck=3, W=32, 50 ep. & 10.7$\times$         & \texttt{ml\_compress.py} \\
-Deep Autoencoder  & ML        & bottleneck=3, W=32, 50 ep. & 10.7$\times$         & \texttt{ml\_compress.py} \\
+Delta Encoding    & Classical & int16, scale=100            & $\approx$2.0$\times$ & \texttt{classical\_methods.py} \\
+VAE               & ML        & bottleneck=3, W=32, 100 ep. & 10.7$\times$          & \texttt{ml\_compress.py} \\
+Deep Autoencoder  & ML        & bottleneck=3, W=32, 100 ep. & 10.7$\times$          & \texttt{ml\_compress.py} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -109,11 +109,12 @@ The Delta Encoding method stores the first sample as a float64~(8~bytes) and all
 
 Both ML compressors are implemented in \texttt{ml\_compress.py} using PyTorch~\cite{pytorch}. The calibrated signal is segmented into overlapping windows of length $W=32$ and normalised using MinMaxScaler.
 
-\textbf{VAE} uses the architecture and training procedure described in Section~\ref{subsec:compression_bg}. The KL weight $\beta=0.001$ is chosen to prevent the KL loss from dominating reconstruction loss during early training. Trained for 50~epochs with Adam~\cite{kingma2014adam}.
+\textbf{VAE} uses the architecture and training procedure described in Section~\ref{subsec:compression_bg}. The KL weight $\beta=0.001$ is chosen to prevent the KL loss from dominating reconstruction loss during early training. Trained for 100~epochs with Adam~\cite{kingma2014adam}.
 
-\textbf{Deep Autoencoder} uses the four-layer encoder~($32\!\rightarrow\!24\!\rightarrow\!16\!\rightarrow\!8\!\rightarrow\!3$) and mirror decoder. Trained for 50~epochs with Adam~\cite{kingma2014adam} and MSE loss.
+\textbf{Deep Autoencoder} uses the four-layer encoder~($32\!\rightarrow\!24\!\rightarrow\!16\!\rightarrow\!8\!\rightarrow\!3$) and mirror decoder. Trained for 100~epochs with Adam~\cite{kingma2014adam} and MSE loss.
 
 \subsection{ATP-3 Evaluation}
+...
 
 Compression performance is measured by:
 \begin{itemize}[leftmargin=2em, nosep]

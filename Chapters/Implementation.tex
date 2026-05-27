@@ -34,7 +34,7 @@ This script implements the Mean Offset, Polynomial (degree=2), and Piecewise Lin
 This is the core contribution of the calibration stage. It implements:
 \begin{itemize}[leftmargin=2em]
     \item \textbf{Random Forest:} Configured with 100 estimators and a depth of 10 to balance accuracy with real-time inference speed.
-    \item \textbf{MLP:} A 4-layer fully connected network $[5\!\rightarrow\!64\!\rightarrow\!128\!\rightarrow\!64\!\rightarrow\!1]$ designed to capture the complex, time-varying emissivity drift.
+    \item \textbf{MLP:} A 4-layer fully connected network $[6\!\rightarrow\!64\!\rightarrow\!128\!\rightarrow\!64\!\rightarrow\!1]$ trained for 100 epochs, designed to capture the complex, time-varying emissivity drift.
     \item \textbf{Gradient Boosting:} Utilizing 200 trees with a learning rate of 0.05, providing an interpretable model for industrial operators.
 \end{itemize}
 
@@ -44,10 +44,10 @@ This is the core contribution of the calibration stage. It implements:
 The compression module focuses on the dual requirement of AP\&T: extreme data reduction for long-term archiving and near-lossless reconstruction for quality auditing.
 
 \paragraph{Near-Lossless Compression (\texttt{compress.py}).}
-This script implements Delta Encoding, which stores the first sample as a \texttt{float64} and subsequent differences as scaled \texttt{int16}. This ensures that the reconstruction error remains below 0.10\,\textdegree C, satisfying the most stringent quality requirements.
+This script implements Delta Encoding, which stores the first sample as a \texttt{float64} and subsequent differences as scaled \texttt{int16}. This ensures that the reconstruction error remains below 0.05\,\textdegree C, satisfying the most stringent quality requirements.
 
 \paragraph{Probabilistic Compression (\texttt{ml\_compress.py}).}
-For high-ratio storage (10.7$\times$), this script implements a Variational Autoencoder (VAE) and a Deep Autoencoder. The VAE uses a 3-dimensional latent bottleneck and a Kullback--Leibler (KL) divergence term ($\beta=0.001$) to regularize the compressed representation, ensuring a smoother reconstruction of the thermal cooling curves.
+For high-ratio storage (10.7$\times$), this script implements a Variational Autoencoder (VAE) and a Deep Autoencoder. The VAE uses a 3-dimensional latent bottleneck and a Kullback--Leibler (KL) divergence term ($\beta=0.001$) to regularize the compressed representation, ensuring a smoother reconstruction of the thermal cooling curves. The model is trained for 100 epochs to ensure convergence of the probabilistic latent space.
 
 \section{Industrial Monitoring and Visualisation}
 \label{sec:visualisation}
